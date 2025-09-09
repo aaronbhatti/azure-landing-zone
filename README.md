@@ -328,7 +328,7 @@ The Azure Landing Zone automatically deploys **80+ Azure policies** following Mi
 **Policies requiring Log Analytics workspace ID:**
 
 - `Deploy-AzActivity-Log`
-- `Deploy-Diag-LogsCat` 
+- `Deploy-Diag-LogsCat`
 - `Deploy-VM-Monitoring`
 - `Deploy-VMSS-Monitoring`
 - `Deploy-vmArc-ChangeTrack`
@@ -381,10 +381,10 @@ terraform apply -var-file="environments/your-environment.tfvars"
 ### 🚀 **Future Automation Plans**
 
 > **📋 Roadmap Note**: We plan to automate the manual configuration steps above by moving Log Analytics workspace ID and AMA resource references directly into the Terraform code. Currently, this is limited by:
-> 
+>
 > - **AVM Dependency Issues**: The Azure Verified Module (AVM) for ALZ has limited support for dynamic policy parameter injection
 > - **Terraform Dependencies**: Log Analytics workspace ID is not known until the first apply, causing for_each dependency conflicts
-> 
+>
 > These limitations will be addressed as the AVM ALZ module matures and supports better dependency management.
 
 ### 📋 **Implementation Steps**
@@ -395,7 +395,7 @@ terraform apply -var-file="environments/your-environment.tfvars"
 2. **Verify Policy Deployment**: Check Azure Policy dashboard for deployed policies
 3. **Review Compliance**: Initial policies will show compliance status
 
-#### **Phase 2: Manual Configuration** 
+#### **Phase 2: Manual Configuration**
 
 1. **Configure Log Analytics Integration**: Add workspace ID to policy parameters
 2. **Set Up AMA Resources**: Deploy data collection rules and managed identities
