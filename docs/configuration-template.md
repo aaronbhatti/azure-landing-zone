@@ -43,7 +43,7 @@ The landing zone uses standardized region abbreviations for resource naming. All
 Examples:
 
 - `location = "UK South"` → resources named with `uks`
-- `location = "East US 2"` → resources named with `eus2` 
+- `location = "East US 2"` → resources named with `eus2`
 - `location = "North Europe"` → resources named with `ne`
 
 ### Resource Naming Best Practices
@@ -138,6 +138,7 @@ management_config = {
 The management layer automatically provisions **Azure Monitor Agent (AMA)** components that integrate with ALZ policies:
 
 **✅ Automatic Components Created:**
+
 - **Log Analytics Workspace**: Central logging and monitoring
 - **Data Collection Rules (DCRs)**:
   - `dcr-vm-insights`: VM performance and dependency monitoring
@@ -147,6 +148,7 @@ The management layer automatically provisions **Azure Monitor Agent (AMA)** comp
 - **Log Analytics Solutions**: VM Insights, Container Insights, Microsoft Sentinel
 
 **✅ Policy Integration Benefits:**
+
 - **Zero Manual Configuration**: Policy parameters auto-populated from management resources
 - **Automatic VM Monitoring**: All VMs get monitoring agents via policy enforcement
 - **Centralized Logging**: All diagnostic data flows to the Log Analytics workspace
