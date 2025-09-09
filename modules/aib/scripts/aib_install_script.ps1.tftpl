@@ -1,0 +1,140 @@
+<#Author		: Aaron Bhatti
+# Usage			: Azure Image Builder Custom Application Installation
+# Note			: Do not add hypens in this script name or Azure Image Builder
+
+#>
+
+$stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+Write-Host "***Starting AVD AIB APPLICATION PHASE -  $((Get-Date).ToUniversalTime()) "
+
+# Global Variables
+$driveLetter = "Z"
+$storagePath = "${script_storage_name}.file.core.windows.net"
+$sharePath = "\\${script_storage_name}.file.core.windows.net\${script_share_name}"
+$username = "localhost\${script_storage_name}"
+$password = "${storage_account_key}"
+$appLocation = "Z:\Applications"
+$logLocation = "Z:\Logs"
+$ErrorActionPreference = 'Stop'
+$env:SEE_MASK_NOZONECHECKS = 1
+
+function Log-Output {
+    param (
+        [string]$message,
+        [string]$level = "INFO"
+    )
+    Write-Host "AVD AIB APPLICATION PHASE: [$level] $message"
+}
+
+# Import necessary module
+try {
+    Import-Module -Name SmbShare -Force -Scope Local
+    Log-Output "Module 'SmbShare' imported successfully."
+} catch {
+    Log-Output "Failed to import module 'SmbShare'. Error: $_" "ERROR"
+}
+
+# Save the password so the drive will persist on reboot
+try {
+    cmd.exe /C "cmdkey /add:`"$storagePath`" /user:`"$username`" /pass:`"$password`""
+    Log-Output "Mapped drive credentials added successfully."
+} catch {
+    Log-Output "Failed to add mapped drive credentials. Error: $_" "ERROR"
+}
+
+# Mount the network share as a persistent drive
+try {
+    if (Get-PSDrive -Name $driveLetter -ErrorAction SilentlyContinue) {
+        Remove-PSDrive -Name $driveLetter -Force -ErrorAction Stop
+        Log-Output "Existing drive '$driveLetter' removed before remapping."
+    }
+
+    New-PSDrive -Name $driveLetter -PSProvider FileSystem -Root $sharePath -Persist
+    Log-Output "$driveLetter drive mapped to $sharePath successfully."
+} catch {
+    Log-Output "Failed to map drive $driveLetter. Error: $_" "ERROR"
+}
+
+# Disable Defender Scanning
+try {
+    Set-MpPreference -DisableRealtimeMonitoring $true
+    Log-Output "Defender RealTime scanning temporarily disabled."
+} catch {
+    Log-Output "Failed to disable Defender RealTime scanning. Error: $_" "ERROR"
+}
+
+# Create log directory
+try {
+    $logDirName = (Get-ComputerInfo -Property CsName).CsName
+    $logDirPath = "C:\Windows\Temp\$logDirName"
+    $env:LOGDIR = $logDirPath
+    New-Item -Type Directory -Path $env:LOGDIR -ErrorAction Stop
+    Log-Output "Log directory '$env:LOGDIR' has been created."
+} catch {
+    Log-Output "Failed to create log directory. Error: $_" "ERROR"
+}
+
+# Installing Applications
+# Log list of Install-*.cmd files for audit purposes
+try {
+    $scriptList = Get-ChildItem -Path $appLocation -Filter "Install-*.cmd" -Recurse | \
+                  Format-Table -Property Name -AutoSize | Out-String
+    $scriptList | Out-File -FilePath "$env:LOGDIR\InstallScriptsList.log" -Encoding UTF8
+    Log-Output "Logged install script list to $env:LOGDIR\InstallScriptsList.log"
+} catch {
+    Log-Output "Failed to log script list. Error: $_" "ERROR"
+}
+
+Log-Output "Starting Application Installation"
+try {
+    Get-ChildItem -Path $appLocation -Filter "Install-*.cmd" -Recurse | ForEach-Object {
+        try {
+            $scriptPath = $_.FullName
+            Log-Output "Installing application from $scriptPath"
+            $output = & cmd.exe /c $scriptPath 2>&1
+            $output | ForEach-Object { Log-Output -message $_ }
+        } catch {
+            Log-Output "Failed to install application from $scriptPath. Error: $_" "ERROR"
+        }
+    }
+    Log-Output "Finished Installing Applications"
+} catch {
+    Log-Output "Failed during application installation. Error: $_" "ERROR"
+}
+
+# Copying log files to App Share
+Log-Output "Copying logs to $logLocation\$logDirName"
+try {
+    ROBOCOPY "$logDirPath" "$logLocation\$logDirName" /MIR /COPY:DAT /DCOPY:DAT /TEE | Out-Null
+    Log-Output "Logs copied successfully to '$logLocation\$logDirName'."
+    $env:SEE_MASK_NOZONECHECKS = 0
+} catch {
+    Log-Output "Failed to copy logs. Error: $_" "ERROR"
+}
+
+# Enable Defender Scanning
+try {
+    Set-MpPreference -DisableRealtimeMonitoring $false
+    Log-Output "Defender RealTime scanning has been enabled."
+} catch {
+    Log-Output "Failed to enable Defender RealTime scanning. Error: $_" "ERROR"
+}
+
+# Removing mapped drive
+try {
+    Remove-PSDrive -Name $driveLetter -Force
+    Log-Output "Mapped drive '$driveLetter' removed successfully."
+    Log-Output "App Installation Script Complete"
+} catch {
+    Log-Output "Failed to remove mapped drive '$driveLetter'. Error: $_" "ERROR"
+    Log-Output "App Installation Script Completed with Errors." "ERROR"
+}
+
+$stopwatch.Stop()
+$elapsedTime = $stopwatch.Elapsed
+Write-Host "*** AVD AIB APPLICATION PHASE - Exit Code: $LASTEXITCODE ***"
+Write-Host "*** Ending AVD AIB APPLICATION PHASE - Time taken: $elapsedTime "
+
+
+# Ensure the script exits with code 0 so AIB can continue
+exit 0

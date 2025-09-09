@@ -1,0 +1,320 @@
+# DR Environment Template
+# Copy this file to dr.tfvars and update the values as needed
+# DR environment provides network foundations and AVD management plane for rapid activation
+
+# Basic Configuration
+org_name    = "CNNECT"
+environment = "DR"
+location    = "UK West"
+
+# Subscription Configuration - UPDATE THESE VALUES
+management_subscription_id   = "YOUR_SUBSCRIPTION_ID_HERE"
+connectivity_subscription_id = "YOUR_SUBSCRIPTION_ID_HERE"
+identity_subscription_id     = "YOUR_SUBSCRIPTION_ID_HERE"
+infra_subscription_id        = "YOUR_SUBSCRIPTION_ID_HERE"
+avd_subscription_id          = "YOUR_SUBSCRIPTION_ID_HERE"
+aib_subscription_id          = "YOUR_SUBSCRIPTION_ID_HERE"
+
+# Enhanced security for DR
+default_tags = {
+  Environment = "DR"
+  Owner       = "IT"
+  CostCenter  = "Shared"
+}
+
+# Core Governance Configuration - DISABLED for DR
+core_config = {
+  enabled = false  # Disabled - DR site doesn't need ALZ policies
+}
+
+# Management Resources Configuration - DISABLED for DR  
+management_config = {
+  enabled = false  # Disabled - DR site doesn't need monitoring/automation
+}
+
+# Hub-and-Spoke Networking Configuration
+connectivity_config = {
+  enabled             = true
+  # resource_group_name = "rg-dr-network-ukw-hub"        # Override computed naming if needed
+  hub_virtual_network = {
+    address_space = ["10.0.0.0/16"]
+
+    subnets = {
+      "AzureBastionSubnet" = {
+        address_prefixes = ["10.0.1.0/24"]
+      }
+      "GatewaySubnet" = {
+        address_prefixes = ["10.0.2.0/24"]
+      }
+      "AzureFirewallSubnet" = {
+        address_prefixes = ["10.0.3.0/24"]
+      }
+    }
+  }
+
+  # Azure Firewall Standard for cost optimization
+  firewall = {
+    sku_name = "AZFW_VNet"
+    sku_tier = "Standard"
+
+    # Firewall Policy Configuration (managed by our AVM module)
+    policy = {
+      # name                   = "fwpol-dr-hub-ukw"          # Override computed naming if needed
+      threat_intelligence_mode = "Alert"
+      dns = {
+        servers       = ["168.63.129.16"] # Azure DNS server required for DNS proxy / Update to domain controllers.
+        proxy_enabled = true
+      }
+    }
+  }
+
+  # VPN Gateway for hybrid connectivity
+  vpn_gateway = {
+    enabled              = false
+    type                 = "Vpn"
+    sku                  = "VpnGw1AZ" # Zone-redundant SKU to support zones
+    zones                = ["1", "2", "3"]
+    enable_active_active = true # Set to false for single IP deployment
+  }
+
+  # ExpressRoute Gateway (disabled - only using VPN)
+  expressroute_gateway = {
+    enabled = false
+  }
+
+  # Private DNS zones for private endpoints
+  private_dns = {
+    enabled = false
+    zones   = []
+  }
+
+  # Azure Bastion (re-enabled after fixing ALZ module validation issues)
+  bastion = {
+    enabled               = false
+    subnet_address_prefix = "10.0.1.0/24"
+    sku                   = "Basic"
+    zones                 = [] # Basic SKU doesn't support zones
+  }
+
+  # NAT Gateway for Azure Firewall subnet to resolve port exhaustion
+  nat_gateway = {
+    enabled = true
+    zones   = ["1"] # NAT Gateway only supports single zone
+    public_ips = {
+      count = 1 # Multiple public IPs for higher SNAT port capacity
+      sku   = "Standard"
+    }
+  }
+
+  # DDoS Protection disabled for cost optimization
+  ddos_protection = {
+    enabled = false
+  }
+}
+
+# IP Range Configuration for Azure Firewall Rules
+# These variables override the defaults in the connectivity module
+# to match the actual network configuration defined above
+
+hub_address_space                  = ["10.0.0.0/16"]
+identity_spoke_address_space       = ["10.1.0.0/16"]
+infrastructure_spoke_address_space = ["10.2.0.0/16"]
+avd_spoke_address_space            = ["10.3.0.0/16"]
+all_spoke_address_spaces           = ["10.0.0.0/16", "10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16"]
+
+# Domain controller IPs (from identity spoke VMs)
+domain_controller_ips = ["10.1.1.10", "10.1.1.11"]
+
+# Specific subnet ranges matching the actual network design
+specific_subnet_ranges = {
+  bastion_subnet         = "10.0.1.0/24"
+  domain_subnets         = ["10.1.1.0/24"]
+  avd_session_hosts      = ["10.3.1.0/24", "10.3.2.0/24", "10.3.3.0/24", "10.3.4.0/24", "10.3.5.0/24"]
+  infrastructure_subnets = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
+}
+
+# External service configuration
+external_service_ips = {
+  dns_servers       = ["168.63.129.16"] # Azure DNS from firewall policy
+  stun_turn_main    = "51.5.0.0/16"
+  stun_turn_legacy  = "20.202.0.0/16"
+  external_services = [] # Add any external service IPs if needed
+}
+
+# DNS Configuration for Virtual Networks
+# Controls DNS resolution for all virtual networks (identity, infrastructure, AVD)
+# DNS Resolution Priority:
+# 1. If firewall is configured AND use_firewall_dns = true -> Use firewall private IP
+# 2. If custom_dns_servers are provided -> Use custom DNS servers
+# 3. Fallback to fallback_dns_servers (default: Azure DNS)
+dns_config = {
+  use_firewall_dns     = true                         # true = Use firewall DNS proxy when available, false = Use custom DNS servers directly
+  custom_dns_servers   = ["10.1.1.10", "10.1.1.11"] # Domain controller IPs (used when firewall DNS disabled or as firewall upstream DNS)
+  fallback_dns_servers = ["168.63.129.16"]           # Azure default DNS as fallback (168.63.129.16 = Azure DNS)
+}
+
+# Identity Services Configuration - Network only, no VMs for DR
+identity_config = {
+  enabled             = true  # Enable to create identity network foundation
+  
+  virtual_network = {
+    address_space = ["10.1.0.0/16"]
+    subnets = {
+      "snet-identity" = {
+        address_prefixes = ["10.1.1.0/24"]
+      }
+    }
+  }
+
+  # NO VMs for DR - just network foundation
+  deploy_virtual_machines = false
+  virtual_machines = {}
+
+  # Basic backup configuration (even though no VMs)
+  enable_backup = false
+  connect_to_hub = true
+  enable_key_vault = false
+}
+
+# Infrastructure Workload Configuration - Network only, no VMs for DR
+infra_config = {
+  enabled             = true  # Enable to create infrastructure network foundation
+  
+  virtual_network = {
+    address_space = ["10.2.0.0/16"]
+    subnets = {
+      "snet-web" = {
+        address_prefixes = ["10.2.1.0/24"]
+      }
+      "snet-app" = {
+        address_prefixes = ["10.2.2.0/24"]
+      }
+      "snet-data" = {
+        address_prefixes = ["10.2.3.0/24"]
+      }
+    }
+  }
+
+  # Connect to hub for network foundation
+  connect_to_hub = true
+  enable_backup  = false  # No backup needed without VMs
+  enable_storage = false  # No storage needed for DR network foundation
+
+  # NO VMs for DR - just network foundation
+  deploy_virtual_machines = false
+  virtual_machines = {}
+}
+
+# Azure Virtual Desktop Configuration - Management plane ready for DR
+avd_config = {
+  enabled = true  # Enable for DR readiness - workspace, host pools ready
+
+  # Basic Configuration
+  workspace_friendly_name       = "DR AVD Workspace"
+  workspace_description         = "DR Azure Virtual Desktop workspace - ready for activation"
+  public_network_access_enabled = true
+
+  # Host Pool Configuration - ready for session hosts
+  host_pool = {
+    friendly_name            = "DR AVD Host Pool"
+    description              = "DR Azure Virtual Desktop Host Pool - ready for session hosts"
+    type                     = "Pooled"
+    maximum_sessions_allowed = 50
+    load_balancer_type       = "BreadthFirst"
+    custom_rdp_properties    = "drivestoredirect:s:;usbdevicestoredirect:s:*;redirectclipboard:i:1;redirectprinters:i:1;audiomode:i:0;videoplaybackmode:i:1;devicestoredirect:s:*;redirectcomports:i:0;redirectsmartcards:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;use multimon:i:1;autoreconnection enabled:i:1;bandwidthautodetect:i:1;networkautodetect:i:1;audiocapturemode:i:1;encode redirected video capture:i:1;camerastoredirect:s:*;redirectlocation:i:1;keyboardhook:i:1;smart sizing:i:1;dynamic resolution:i:1;maximizetocurrentdisplays:i:1;singlemoninwindowedmode:i:1;screen mode id:i:2;enablerdsaadauth:i:1"
+    start_vm_on_connect      = true
+    validate_environment     = false
+  }
+
+  # Application Group Configuration - ready for apps
+  application_group = {
+    friendly_name                = "DR AVD Desktop Application Group"
+    description                  = "DR Azure Virtual Desktop Desktop Application Group"
+    type                         = "Desktop"
+    default_desktop_display_name = "DR Desktop"
+  }
+
+  # Enable AVD Insights for monitoring when activated
+  enable_insights = true
+
+  # Enable RBAC role assignments for Start VM on Connect feature
+  enable_start_vm_rbac = true
+
+  # Network Configuration - create dedicated AVD spoke network for DR
+  create_virtual_network = true
+  connect_to_hub         = true
+  virtual_network = {
+    address_space = ["10.3.0.0/16"]
+    subnets = {
+      "snet-dr-desktop-ukw" = {
+        address_prefixes  = ["10.3.1.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+      "snet-dr-admin-desktop-ukw" = {
+        address_prefixes  = ["10.3.2.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+    }
+  }
+
+  # FSLogix Configuration - enabled for DR activation
+  fslogix = {
+    enabled                 = true
+    profile_share_size_gb   = 100
+    container_share_size_gb = 100
+    enable_private_endpoint = false
+  }
+
+  # Scaling Plan Configuration - ready for session hosts
+  scaling_plan = {
+    name      = "scaling-plan-dr-ukw"  # Required field for scaling plan
+    time_zone = "GMT Standard Time"
+    schedules = {
+      "Weekday" = {
+        name                                 = "Weekday"
+        days_of_week                         = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        ramp_up_start_time                   = "07:00"
+        ramp_up_load_balancing_algorithm     = "BreadthFirst"
+        ramp_up_minimum_hosts_percent        = 40
+        ramp_up_capacity_threshold_percent   = 80
+        peak_start_time                      = "08:00"
+        peak_load_balancing_algorithm        = "DepthFirst"
+        ramp_down_start_time                 = "19:00"
+        ramp_down_load_balancing_algorithm   = "DepthFirst"
+        ramp_down_minimum_hosts_percent      = 5
+        ramp_down_capacity_threshold_percent = 90
+        ramp_down_force_logoff_users         = false
+        ramp_down_wait_time_minutes          = 15
+        ramp_down_notification_message       = "This desktop is shutting down in 15 minutes. Please save your work and logout."
+        ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+        off_peak_start_time                  = "20:00"
+        off_peak_load_balancing_algorithm    = "DepthFirst"
+      },
+      "Weekend" = {
+        name                                 = "Weekend"
+        days_of_week                         = ["Saturday", "Sunday"]
+        ramp_up_start_time                   = "08:00"
+        ramp_up_load_balancing_algorithm     = "DepthFirst"
+        ramp_up_minimum_hosts_percent        = 5
+        ramp_up_capacity_threshold_percent   = 70
+        peak_start_time                      = "09:00"
+        peak_load_balancing_algorithm        = "DepthFirst"
+        ramp_down_start_time                 = "18:00"
+        ramp_down_load_balancing_algorithm   = "DepthFirst"
+        ramp_down_minimum_hosts_percent      = 5
+        ramp_down_capacity_threshold_percent = 50
+        ramp_down_force_logoff_users         = false
+        ramp_down_wait_time_minutes          = 15
+        ramp_down_notification_message       = "This desktop will be shutting down for maintenance in 15 minutes, please save your work and log out immediately."
+        ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+        off_peak_start_time                  = "19:00"
+        off_peak_load_balancing_algorithm    = "DepthFirst"
+      }
+    }
+  }
+}
+
+# Azure Image Builder Configuration - DISABLED for DR
+aib_config = {
+  enabled = false  # Disabled - DR site doesn't need custom images
+}

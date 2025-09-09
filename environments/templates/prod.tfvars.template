@@ -1,0 +1,513 @@
+# This configuration deploys the complete Azure Landing Zone foundation
+
+# Basic Configuration
+org_name    = "CNNECT"
+environment = "Prod"
+location    = "UK South"
+
+# Subscription Configuration - UPDATE THESE VALUES
+management_subscription_id   = "YOUR_SUBSCRIPTION_ID_HERE"
+connectivity_subscription_id = "YOUR_SUBSCRIPTION_ID_HERE"
+identity_subscription_id     = "YOUR_SUBSCRIPTION_ID_HERE"
+infra_subscription_id        = "YOUR_SUBSCRIPTION_ID_HERE"
+avd_subscription_id          = "YOUR_SUBSCRIPTION_ID_HERE"
+aib_subscription_id          = "YOUR_SUBSCRIPTION_ID_HERE"
+
+# Enhanced security for production
+default_tags = {
+  Environment = "Production"
+  Owner       = "IT"
+  CostCenter  = "Shared"
+}
+
+# Core Governance Configuration (Global policies only)
+core_config = {
+  enabled                       = true
+  management_group_display_name = "CNNECT"
+  management_group_id           = "alz"
+  management_group_parent_id    = null # Will use tenant root management group dynamically
+  enable_policy_assignments     = true
+}
+
+# Management Resources Configuration
+management_config = {
+  enabled = true
+  log_analytics = {
+    retention_in_days = 30
+    sku               = "PerGB2018"
+  }
+
+  automation_account = {
+    sku = "Basic"
+  }
+}
+
+# Hub-and-Spoke Networking Configuration
+connectivity_config = {
+  enabled             = true
+  # resource_group_name = "rg-prod-network-uks-hub"      # Override computed naming if needed
+  hub_virtual_network = {
+    address_space = ["10.0.0.0/16"]
+
+    subnets = {
+      "AzureBastionSubnet" = {
+        address_prefixes = ["10.0.1.0/24"]
+      }
+      "GatewaySubnet" = {
+        address_prefixes = ["10.0.2.0/24"]
+      }
+      "AzureFirewallSubnet" = {
+        address_prefixes = ["10.0.3.0/24"]
+      }
+    }
+  }
+
+  # Azure Firewall Standard for cost optimization
+  firewall = {
+    sku_name = "AZFW_VNet"
+    sku_tier = "Standard"
+
+    # Firewall Policy Configuration (managed by our AVM module)
+    policy = {
+      # name                   = "fwpol-prod-hub-uks"        # Override computed naming if needed
+      threat_intelligence_mode = "Alert"
+      dns = {
+        servers       = ["168.63.129.16"] # Azure DNS server required for DNS proxy / Update to domain controllers.
+        proxy_enabled = true
+      }
+    }
+  }
+
+  # VPN Gateway for hybrid connectivity
+  vpn_gateway = {
+    enabled              = false
+    type                 = "Vpn"
+    sku                  = "VpnGw1AZ" # Zone-redundant SKU to support zones
+    zones                = ["1", "2", "3"]
+    enable_active_active = true # Set to false for single IP deployment
+  }
+
+  # ExpressRoute Gateway (disabled - only using VPN)
+  expressroute_gateway = {
+    enabled = false
+  }
+
+  # Private DNS zones for private endpoints
+  private_dns = {
+    enabled = false
+    zones   = []
+  }
+
+  # DDoS Protection disabled for cost optimization
+  ddos_protection = {
+    enabled = false
+  }
+
+  # Azure Bastion (re-enabled after fixing ALZ module validation issues)
+  bastion = {
+    enabled               = false
+    subnet_address_prefix = "10.0.1.0/24"
+    sku                   = "Basic"
+    zones                 = [] # Basic SKU doesn't support zones
+  }
+
+  # NAT Gateway for Azure Firewall subnet to resolve port exhaustion
+  nat_gateway = {
+    enabled = true
+    zones   = ["1"] # NAT Gateway only supports single zone
+    public_ips = {
+      count = 1 # Multiple public IPs for higher SNAT port capacity
+      sku   = "Standard"
+    }
+  }
+}
+
+# IP Range Configuration for Azure Firewall Rules
+# These variables override the defaults in the connectivity module
+# to match the actual network configuration defined above
+
+hub_address_space                  = ["10.0.0.0/16"]
+identity_spoke_address_space       = ["10.1.0.0/16"]
+infrastructure_spoke_address_space = ["10.2.0.0/16"]
+avd_spoke_address_space            = ["10.3.0.0/16"]
+all_spoke_address_spaces           = ["10.0.0.0/16", "10.1.0.0/16", "10.2.0.0/16", "10.3.0.0/16"]
+
+# Domain controller IPs (from identity spoke VMs)
+domain_controller_ips = ["10.1.1.10", "10.1.1.11"]
+
+# Specific subnet ranges matching the actual network design
+specific_subnet_ranges = {
+  bastion_subnet         = "10.0.1.0/24"
+  domain_subnets         = ["10.1.1.0/24"]
+  avd_session_hosts      = ["10.3.1.0/24", "10.3.2.0/24", "10.3.3.0/24", "10.3.4.0/24", "10.3.5.0/24"]
+  infrastructure_subnets = ["10.2.1.0/24", "10.2.2.0/24", "10.2.3.0/24"]
+}
+
+# External service configuration
+external_service_ips = {
+  dns_servers       = ["168.63.129.16"] # Azure DNS from firewall policy
+  stun_turn_main    = "51.5.0.0/16"
+  stun_turn_legacy  = "20.202.0.0/16"
+  external_services = [] # Add any external service IPs if needed
+}
+
+# DNS Configuration for Virtual Networks
+# Controls DNS resolution for all virtual networks (identity, infrastructure, AVD)
+# DNS Resolution Priority:
+# 1. If firewall is configured AND use_firewall_dns = true -> Use firewall private IP
+# 2. If custom_dns_servers are provided -> Use custom DNS servers
+# 3. Fallback to fallback_dns_servers (default: Azure DNS)
+dns_config = {
+  use_firewall_dns     = true                       # true = Use firewall DNS proxy when available, false = Use custom DNS servers directly
+  custom_dns_servers   = ["10.1.1.10", "10.1.1.11"] # Domain controller IPs (used when firewall DNS disabled or as firewall upstream DNS)
+  fallback_dns_servers = ["168.63.129.16"]          # Azure default DNS as fallback (168.63.129.16 = Azure DNS)
+}
+
+# Identity Services Configuration (Domain Controllers)
+identity_config = {
+  enabled             = true
+  # resource_group_name = "rg-prod-identity-uks-network"  # Override computed naming if needed
+
+  virtual_network = {
+    # name        = "vnet-prod-identity-uks"    # Override computed naming if needed
+    address_space = ["10.1.0.0/16"]
+
+    subnets = {
+      "snet-identity" = {
+        address_prefixes = ["10.1.1.0/24"]
+      }
+    }
+  }
+
+  # Virtual Machines Configuration with Custom Naming
+  deploy_virtual_machines = true
+  virtual_machines = {
+    "dc" = {
+      count              = 1
+      vm_size            = "Standard_D2s_v5"
+      os_type            = "Windows"
+      os_sku             = "2022-datacenter-g2"
+      admin_username     = "dcadmin"
+      os_disk_size_gb    = 128
+      subnet_name        = "snet-identity"
+      vm_name_prefix     = "DC"
+      availability_zones = ["1", "2"]
+      static_ip_start    = "10.1.1.10"
+      enable_extensions  = true
+
+      # Multiple NICs support (single NIC for DCs)
+      network_interfaces = [
+        {
+          subnet_name                   = "snet-identity"
+          private_ip_allocation_method  = "Static"
+          static_ip_address             = "10.1.1.10"
+          enable_ip_forwarding          = false
+          enable_accelerated_networking = false
+        }
+      ]
+
+      # Multiple Data Disks support
+      # data_disks = [
+      #   {
+      #     size_gb              = 256
+      #     caching              = "None" # Critical for AD DS
+      #     storage_account_type = "Premium_LRS"
+      #     lun                  = 0
+      #   }
+      # ]
+    }
+  }
+
+  # Enhanced backup configuration
+  enable_backup = true
+  backup_config = {
+    sku                           = "Standard"
+    storage_mode_type             = "LocallyRedundant"
+    cross_region_restore_enabled  = false
+    public_network_access_enabled = true
+    immutability                  = "Unlocked"
+  }
+
+  # VM Backup Policy Configuration (spoke-level)
+  vm_backup_policy_config = {
+    enabled                   = true
+    enforcement_mode          = true
+    required_tags             = ["Environment", "Workload"]
+    create_remediation_tasks  = true
+    remediation_max_resources = 500
+  }
+
+  # Connect to hub network
+  connect_to_hub = true
+
+  # Key Vault Configuration for domain credentials
+  enable_key_vault = false
+  key_vault_config = null
+}
+
+# Infrastructure Workload Configuration (Networking Only)
+infra_config = {
+  enabled             = true
+  # resource_group_name = "rg-prod-infra-uks-network"     # Override computed naming if needed
+
+  virtual_network = {
+    # name        = "vnet-prod-infra-uks"       # Override computed naming if needed
+    address_space = ["10.2.0.0/16"]
+
+    subnets = {
+      "snet-web" = {
+        address_prefixes = ["10.2.1.0/24"]
+      }
+      "snet-app" = {
+        address_prefixes = ["10.2.2.0/24"]
+      }
+      "snet-data" = {
+        address_prefixes = ["10.2.3.0/24"]
+      }
+    }
+  }
+
+  # Connect to hub for secure internet access
+  connect_to_hub = true
+  enable_backup  = true # Enabled to protect identity infrastructure  
+  backup_config = {
+    sku                           = "Standard"
+    storage_mode_type             = "LocallyRedundant"
+    cross_region_restore_enabled  = false
+    public_network_access_enabled = true
+    immutability                  = "Unlocked"
+  }
+
+  # VM Backup Policy Configuration (spoke-level)
+  vm_backup_policy_config = {
+    enabled                   = true
+    enforcement_mode          = true
+    required_tags             = ["Environment", "Workload"]
+    create_remediation_tasks  = true
+    remediation_max_resources = 500
+  }
+
+  enable_storage = false # Disabled due to Azure policy restrictions
+
+  # Virtual Machines Configuration with Custom Naming
+  deploy_virtual_machines = true
+  virtual_machines = {
+    "web" = {
+      count              = 1
+      vm_size            = "Standard_D2s_v5"
+      os_type            = "Windows"
+      os_sku             = "2022-datacenter-g2"
+      admin_username     = "azureadmin"
+      os_disk_size_gb    = 128
+      subnet_name        = "snet-web"
+      vm_name_prefix     = "WEB"
+      availability_zones = ["1", "2"]
+      static_ip_start    = "10.2.1.10"
+      enable_extensions  = true
+
+      network_interfaces = [
+        {
+          subnet_name                   = "snet-web"
+          private_ip_allocation_method  = "Static"
+          static_ip_address             = "10.2.1.10"
+          enable_accelerated_networking = true
+        }
+      ]
+    }
+    "app" = {
+      count              = 1
+      vm_size            = "Standard_D2s_v5"
+      os_type            = "Windows"
+      os_sku             = "2022-datacenter-g2"
+      admin_username     = "azureadmin"
+      os_disk_size_gb    = 128
+      subnet_name        = "snet-app"
+      vm_name_prefix     = "APP"
+      availability_zones = ["1", "2"]
+      static_ip_start    = "10.2.2.10"
+      enable_extensions  = true
+
+      network_interfaces = [
+        {
+          subnet_name                   = "snet-app"
+          private_ip_allocation_method  = "Static"
+          static_ip_address             = "10.2.2.10"
+          enable_accelerated_networking = true
+        }
+      ]
+
+      data_disks = [
+        {
+          size_gb = 128
+          lun     = 0
+        }
+      ]
+    }
+  }
+}
+
+# Azure Virtual Desktop Configuration
+avd_config = {
+  enabled = true
+
+  # Basic Configuration
+  # resource_group_name         = "rg-prod-avd-uks"        # Override computed naming if needed
+  # workspace_name              = "ws-prod-avd-uks"        # Override computed naming if needed
+  workspace_friendly_name       = "Production AVD Workspace"
+  workspace_description         = "Production Azure Virtual Desktop workspace"
+  public_network_access_enabled = true
+
+  # Host Pool Configuration
+  host_pool = {
+    # name                   = "hp-prod-avd-uks"            # Override computed naming if needed
+    friendly_name            = "Production AVD Host Pool"
+    description              = "Production Azure Virtual Desktop Host Pool"
+    type                     = "Pooled"
+    maximum_sessions_allowed = 50
+    load_balancer_type       = "BreadthFirst"
+    custom_rdp_properties    = "drivestoredirect:s:;usbdevicestoredirect:s:*;redirectclipboard:i:1;redirectprinters:i:1;audiomode:i:0;videoplaybackmode:i:1;devicestoredirect:s:*;redirectcomports:i:0;redirectsmartcards:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;use multimon:i:1;autoreconnection enabled:i:1;bandwidthautodetect:i:1;networkautodetect:i:1;audiocapturemode:i:1;encode redirected video capture:i:1;camerastoredirect:s:*;redirectlocation:i:1;keyboardhook:i:1;smart sizing:i:1;dynamic resolution:i:1;maximizetocurrentdisplays:i:1;singlemoninwindowedmode:i:1;screen mode id:i:2;enablerdsaadauth:i:1"
+    start_vm_on_connect      = true
+    validate_environment     = false
+  }
+
+  # Application Group Configuration
+  application_group = {
+    # name                       = "ag-prod-avd-uks"          # Override computed naming if needed
+    friendly_name                = "Production AVD Desktop Application Group"
+    description                  = "Production Azure Virtual Desktop Desktop Application Group"
+    type                         = "Desktop"
+    default_desktop_display_name = "Production Desktop"
+  }
+
+  # Enable AVD Insights
+  enable_insights = true
+
+  # Enable RBAC role assignments for Start VM on Connect feature
+  enable_start_vm_rbac = false
+
+  # Network Configuration - create dedicated AVD spoke network
+  create_virtual_network = true
+  connect_to_hub         = true
+  virtual_network = {
+    # name        = "vnet-prod-avd-uks"        # Override computed naming if needed
+    address_space = ["10.3.0.0/16"]
+    subnets = {
+      "snet-prod-desktop-uks" = {
+        address_prefixes  = ["10.3.1.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+      "snet-prod-admin-desktop-uks" = {
+        address_prefixes  = ["10.3.2.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+      "snet-prod-thirdparty-desktop-uks" = {
+        address_prefixes  = ["10.3.3.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+      "snet-prod-test-desktop-uks" = {
+        address_prefixes  = ["10.3.4.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+      "snet-prod-build-desktop-uks" = {
+        address_prefixes  = ["10.3.5.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"]
+      }
+    }
+  }
+
+  # FSLogix Configuration - enabled for production
+  fslogix = {
+    enabled                 = true
+    profile_share_size_gb   = 100
+    container_share_size_gb = 100
+    enable_private_endpoint = false
+  }
+
+  # Scaling Plan Configuration (matches JSON specification)
+  scaling_plan = {
+    name      = "scaling-plan-prod-uks"  # Required field for scaling plan
+    time_zone = "GMT Standard Time"
+    schedules = {
+      "Weekday" = {
+        name                                 = "Weekday"
+        days_of_week                         = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        ramp_up_start_time                   = "07:00"
+        ramp_up_load_balancing_algorithm     = "BreadthFirst"
+        ramp_up_minimum_hosts_percent        = 40
+        ramp_up_capacity_threshold_percent   = 80
+        peak_start_time                      = "08:00"
+        peak_load_balancing_algorithm        = "DepthFirst"
+        ramp_down_start_time                 = "19:00"
+        ramp_down_load_balancing_algorithm   = "DepthFirst"
+        ramp_down_minimum_hosts_percent      = 5
+        ramp_down_capacity_threshold_percent = 90
+        ramp_down_force_logoff_users         = false
+        ramp_down_wait_time_minutes          = 15
+        ramp_down_notification_message       = "This desktop is shutting down in 15 minutes. Please save your work and logout."
+        ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+        off_peak_start_time                  = "20:00"
+        off_peak_load_balancing_algorithm    = "DepthFirst"
+      },
+      "Weekend" = {
+        name                                 = "Weekend"
+        days_of_week                         = ["Saturday", "Sunday"]
+        ramp_up_start_time                   = "08:00"
+        ramp_up_load_balancing_algorithm     = "DepthFirst"
+        ramp_up_minimum_hosts_percent        = 5
+        ramp_up_capacity_threshold_percent   = 70
+        peak_start_time                      = "09:00"
+        peak_load_balancing_algorithm        = "DepthFirst"
+        ramp_down_start_time                 = "18:00"
+        ramp_down_load_balancing_algorithm   = "DepthFirst"
+        ramp_down_minimum_hosts_percent      = 5
+        ramp_down_capacity_threshold_percent = 50
+        ramp_down_force_logoff_users         = false
+        ramp_down_wait_time_minutes          = 15
+        ramp_down_notification_message       = "This desktop will be shutting down for maintenance in 15 minutes, please save your work and log out immediately."
+        ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+        off_peak_start_time                  = "19:00"
+        off_peak_load_balancing_algorithm    = "DepthFirst"
+      }
+    }
+  }
+}
+
+
+# Azure Image Builder Configuration
+aib_config = {
+  enabled = true
+
+  # Storage configuration  
+  enable_file_share        = true
+  file_share_quota_gb      = 100
+  enable_private_endpoints = false
+
+  # Replication to UK South only for production
+  replication_regions = ["UK South", "UK West"]
+
+  # Custom AVD image with Windows 11 + Microsoft 365
+  images = {
+    "avd-win11-m365" = {
+      name        = "avd-win11-m365"
+      description = "Windows 11 Multi-session with Microsoft 365 Apps for AVD - Production"
+      os_type     = "Windows"
+
+      # VM specifications for building
+      vm_size               = "Standard_E2as_v6"
+      os_disk_size_gb       = 127
+      build_timeout_minutes = 300
+
+      # Image specifications
+      hyper_v_generation          = "V2"
+      trusted_launch_supported    = true
+      enable_nvme_disk_controller = true
+
+      # Source image
+      publisher = "MicrosoftWindowsDesktop"
+      offer     = "office-365"
+      sku       = "win11-24h2-avd-m365"
+      version   = "latest"
+    }
+  }
+}
+

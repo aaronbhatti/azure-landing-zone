@@ -1,0 +1,509 @@
+# This configuration deploys the Azure Landing Zone foundation for testing customizations
+
+# Basic Configuration
+org_name    = "CNNECT"
+environment = "Test"
+location    = "East US 2"
+
+# Subscription Configuration - UPDATE THESE VALUES
+management_subscription_id   = "YOUR_SUBSCRIPTION_ID_HERE"
+connectivity_subscription_id = "YOUR_SUBSCRIPTION_ID_HERE"
+identity_subscription_id     = "YOUR_SUBSCRIPTION_ID_HERE"
+infra_subscription_id        = "YOUR_SUBSCRIPTION_ID_HERE"
+avd_subscription_id          = "YOUR_SUBSCRIPTION_ID_HERE"
+aib_subscription_id          = "YOUR_SUBSCRIPTION_ID_HERE"
+
+# Test environment tags - matching prod structure but with Test values
+default_tags = {
+  Environment = "Test"
+  Owner       = "IT"
+  CostCenter  = "Shared"
+}
+
+# Core Governance Configuration (Global policies only) - Same as prod for naming testing
+core_config = {
+  enabled                       = true
+  management_group_display_name = "CNNECT"
+  management_group_id           = "alz"
+  management_group_parent_id    = null # Will use tenant root management group dynamically
+  enable_policy_assignments     = true
+}
+
+# Management Resources Configuration - Same as prod for naming testing
+management_config = {
+  enabled = true
+  log_analytics = {
+    retention_in_days = 30
+    sku               = "PerGB2018"
+  }
+
+  automation_account = {
+    sku = "Basic"
+  }
+}
+
+# Hub-and-Spoke Networking Configuration - NEW IP RANGES
+connectivity_config = {
+  enabled             = true
+  # resource_group_name = null  # Uses computed naming: rg-test-network-eus2-hub
+  hub_virtual_network = {
+    address_space = ["10.10.0.0/16"] # Different IP range for testing
+
+    subnets = {
+      "AzureBastionSubnet" = {
+        address_prefixes = ["10.10.1.0/24"]
+      }
+      "GatewaySubnet" = {
+        address_prefixes = ["10.10.2.0/24"]
+      }
+      "AzureFirewallSubnet" = {
+        address_prefixes = ["10.10.3.0/24"]
+      }
+    }
+  }
+
+  # Azure Firewall Basic for cost optimization in test
+  firewall = {
+    sku_name = "AZFW_VNet"
+    sku_tier = "Standard"
+
+    # Firewall Policy Configuration with test-specific settings
+    policy = {
+      # name                   = null  # Uses computed naming: fwpol-test-hub-eus2
+      threat_intelligence_mode = "Off" # Disabled for testing
+      dns = {
+        servers       = ["8.8.8.8", "8.8.4.4"] # Public DNS for testing
+        proxy_enabled = false # Disabled for testing
+      }
+    }
+  }
+
+  # VPN Gateway enabled for testing connectivity features
+  vpn_gateway = {
+    enabled              = false
+    type                 = "Vpn"
+    sku                  = "VpnGw1" # Non-zone redundant for cost
+    zones                = [] # No zones for basic testing
+    enable_active_active = false # Single IP for testing
+  }
+
+  # ExpressRoute Gateway disabled
+  expressroute_gateway = {
+    enabled = false
+  }
+
+  # Private DNS zones enabled for testing
+  private_dns = {
+    enabled = false
+    zones   = ["privatelink.blob.core.windows.net", "privatelink.vaultcore.azure.net"]
+  }
+
+  # DDoS Protection
+  ddos_protection = {
+    enabled = false
+  }
+
+  # Azure Bastion with Standard SKU for testing advanced features
+  bastion = {
+    enabled               = false
+    subnet_address_prefix = "10.10.1.0/24"
+    sku                   = "Standard" # Standard SKU for testing features
+    zones                 = ["1", "2"] # Test zone configuration
+  }
+
+  # NAT Gateway with multiple public IPs for testing
+  nat_gateway = {
+    enabled = true
+    zones   = ["1"] # Single zone - NAT Gateway only supports one zone
+    public_ips = {
+      count = 2 # Multiple IPs for testing
+      sku   = "Standard"
+    }
+  }
+}
+
+# NEW IP RANGES for all spokes
+hub_address_space                  = ["10.10.0.0/16"]
+identity_spoke_address_space       = ["10.20.0.0/16"]
+infrastructure_spoke_address_space = ["10.30.0.0/16"]
+avd_spoke_address_space            = ["10.40.0.0/16"]
+all_spoke_address_spaces           = ["10.10.0.0/16", "10.20.0.0/16", "10.30.0.0/16", "10.40.0.0/16"]
+
+# Domain controller IPs (updated for new IP range)
+domain_controller_ips = ["10.20.1.10", "10.20.1.11"]
+
+# Updated subnet ranges for new IP scheme
+specific_subnet_ranges = {
+  bastion_subnet         = "10.10.1.0/24"
+  domain_subnets         = ["10.20.1.0/24"]
+  avd_session_hosts      = ["10.40.1.0/24", "10.40.2.0/24", "10.40.3.0/24", "10.40.4.0/24", "10.40.5.0/24"]
+  infrastructure_subnets = ["10.30.1.0/24", "10.30.2.0/24", "10.30.3.0/24"]
+}
+
+# External service configuration for testing
+external_service_ips = {
+  dns_servers       = ["8.8.8.8", "8.8.4.4"] # Public DNS for testing
+  stun_turn_main    = "51.5.0.0/16"
+  stun_turn_legacy  = "20.202.0.0/16"
+  external_services = ["1.1.1.1", "1.0.0.1"] # Cloudflare DNS for testing
+}
+
+# DNS Configuration for Virtual Networks
+# Controls DNS resolution for all virtual networks (identity, infrastructure, AVD)
+# DNS Resolution Priority:
+# 1. If firewall is configured AND use_firewall_dns = true -> Use firewall private IP
+# 2. If custom_dns_servers are provided -> Use custom DNS servers
+# 3. Fallback to fallback_dns_servers (default: Azure DNS)
+dns_config = {
+  use_firewall_dns     = true                         # true = Use firewall DNS proxy when available, false = Use custom DNS servers directly
+  custom_dns_servers   = ["10.20.1.10", "10.20.1.11"] # Domain controller IPs (used when firewall DNS disabled or as firewall upstream DNS)
+  fallback_dns_servers = ["168.63.129.16"]            # Azure default DNS as fallback (168.63.129.16 = Azure DNS)
+}
+
+# Identity Services Configuration with test customisations
+identity_config = {
+  enabled             = true
+  # resource_group_name = null  # Uses computed naming: rg-test-identity-eus2-network
+
+  virtual_network = {
+    # name        = "vnet-test-identity-eus2"  # Override computed naming if needed
+    address_space = ["10.20.0.0/16"] # New IP range
+
+    subnets = {
+      "snet-identity" = {
+        address_prefixes = ["10.20.1.0/24"]
+      }
+      "snet-identity-secondary" = { # Additional subnet for testing
+        address_prefixes = ["10.20.2.0/24"]
+      }
+    }
+  }
+
+  # Virtual Machines Configuration with Custom Naming - Same as prod
+  deploy_virtual_machines = true
+  virtual_machines = {
+    "dc" = {
+      count              = 1
+      vm_size            = "Standard_D2s_v5"
+      os_type            = "Windows"
+      os_sku             = "2022-datacenter-g2"
+      admin_username     = "dcadmin"
+      os_disk_size_gb    = 128
+      subnet_name        = "snet-identity"
+      vm_name_prefix     = "DC"
+      availability_zones = ["1", "2"]
+      static_ip_start    = "10.20.1.10"
+      enable_extensions  = true
+
+      # Multiple NICs support (single NIC for DCs)
+      network_interfaces = [
+        {
+          subnet_name                   = "snet-identity"
+          private_ip_allocation_method  = "Static"
+          static_ip_address             = "10.20.1.10"
+          enable_ip_forwarding          = false
+          enable_accelerated_networking = false
+        }
+      ]
+
+      # Multiple Data Disks support
+      # data_disks = [
+      #   {
+      #     size_gb              = 256
+      #     caching              = "None" # Critical for AD DS
+      #     storage_account_type = "Premium_LRS"
+      #     lun                  = 0
+      #   }
+      # ]
+    }
+  }
+
+  # Enhanced backup configuration
+  enable_backup = true
+  backup_config = {
+    sku                           = "Standard"
+    storage_mode_type             = "LocallyRedundant"
+    cross_region_restore_enabled  = false
+    public_network_access_enabled = true
+    immutability                  = "Unlocked"
+  }
+
+  # VM Backup Policy Configuration (spoke-level) - Same as prod
+  vm_backup_policy_config = {
+    enabled                   = true
+    enforcement_mode          = true
+    required_tags             = ["Environment", "Workload"]
+    create_remediation_tasks  = true
+    remediation_max_resources = 500
+  }
+
+  connect_to_hub = true
+
+  # Key Vault Configuration for domain credentials - Same as prod
+  enable_key_vault = false
+  key_vault_config = null
+}
+
+# Infrastructure Workload Configuration with test customizations
+infra_config = {
+  enabled             = true
+  # resource_group_name = null  # Uses computed naming: rg-test-infra-eus2-network
+
+  virtual_network = {
+    # name        = "vnet-test-infra-eus2"     # Override computed naming if needed
+    address_space = ["10.30.0.0/16"] # New IP range
+
+    subnets = {
+      "snet-web" = {
+        address_prefixes = ["10.30.1.0/24"]
+      }
+      "snet-app" = {
+        address_prefixes = ["10.30.2.0/24"]
+      }
+      "snet-data" = {
+        address_prefixes = ["10.30.3.0/24"]
+      }
+      "snet-test-additional" = { # Additional subnet for testing
+        address_prefixes = ["10.30.4.0/24"]
+      }
+    }
+  }
+
+  # Connect to hub for secure internet access
+  connect_to_hub = true
+  enable_backup  = true # Enabled to protect identity infrastructure  
+  backup_config = {
+    sku                           = "Standard"
+    storage_mode_type             = "LocallyRedundant"
+    cross_region_restore_enabled  = false
+    public_network_access_enabled = true
+    immutability                  = "Unlocked"
+  }
+
+  # VM Backup Policy Configuration (spoke-level)
+  vm_backup_policy_config = {
+    enabled                   = true
+    enforcement_mode          = true
+    required_tags             = ["Environment", "Workload"]
+    create_remediation_tasks  = true
+    remediation_max_resources = 500
+  }
+
+  enable_storage = false
+
+  # Virtual Machines Configuration with Custom Naming - Same as prod
+  deploy_virtual_machines = true
+  virtual_machines = {
+    "web" = {
+      count              = 1
+      vm_size            = "Standard_D2s_v5"
+      os_type            = "Windows"
+      os_sku             = "2022-datacenter-g2"
+      admin_username     = "azureadmin"
+      os_disk_size_gb    = 128
+      subnet_name        = "snet-web"
+      vm_name_prefix     = "WEB"
+      availability_zones = ["1", "2"]
+      static_ip_start    = "10.30.1.10"
+      enable_extensions  = true
+
+      network_interfaces = [
+        {
+          subnet_name                   = "snet-web"
+          private_ip_allocation_method  = "Static"
+          static_ip_address             = "10.30.1.10"
+          enable_accelerated_networking = true
+        }
+      ]
+    }
+    "app" = {
+      count              = 1
+      vm_size            = "Standard_D2s_v5"
+      os_type            = "Windows"
+      os_sku             = "2022-datacenter-g2"
+      admin_username     = "azureadmin"
+      os_disk_size_gb    = 128
+      subnet_name        = "snet-app"
+      vm_name_prefix     = "APP"
+      availability_zones = ["1", "2"]
+      static_ip_start    = "10.30.2.10"
+      enable_extensions  = true
+
+      network_interfaces = [
+        {
+          subnet_name                   = "snet-app"
+          private_ip_allocation_method  = "Static"
+          static_ip_address             = "10.30.2.10"
+          enable_accelerated_networking = true
+        }
+      ]
+
+      data_disks = [
+        {
+          size_gb = 128
+          lun     = 0
+        }
+      ]
+    }
+  }
+}
+
+# Azure Virtual Desktop Configuration with test customizations
+avd_config = {
+  enabled = true
+
+  # Basic Configuration
+  # resource_group_name         = null  # Uses computed naming: rg-test-avd-eus2
+  # workspace_name              = null  # Uses computed naming: ws-test-avd-eus2
+  workspace_friendly_name       = "Test AVD Workspace"
+  workspace_description         = "Test Azure Virtual Desktop workspace for validation"
+  public_network_access_enabled = true
+
+  # Host Pool with test-specific settings
+  host_pool = {
+    # name                   = null  # Uses computed naming: hp-test-avd-eus2
+    friendly_name            = "Test AVD Host Pool"
+    description              = "Test Azure Virtual Desktop Host Pool"
+    type                     = "Pooled" # Changed to Pooled for scaling plan compatibility
+    maximum_sessions_allowed = 10 # Lower limit for testing
+    load_balancer_type       = "BreadthFirst" # BreadthFirst for pooled desktops
+    custom_rdp_properties    = "drivestoredirect:s:;usbdevicestoredirect:s:*;redirectclipboard:i:1;redirectprinters:i:1;audiomode:i:0;videoplaybackmode:i:1;devicestoredirect:s:*;redirectcomports:i:0;redirectsmartcards:i:1;enablecredsspsupport:i:1;redirectwebauthn:i:1;use multimon:i:1;autoreconnection enabled:i:1;bandwidthautodetect:i:1;networkautodetect:i:1;audiocapturemode:i:1;encode redirected video capture:i:1;camerastoredirect:s:*;redirectlocation:i:1;keyboardhook:i:1;smart sizing:i:1;dynamic resolution:i:1;maximizetocurrentdisplays:i:1;singlemoninwindowedmode:i:1;screen mode id:i:2;enablerdsaadauth:i:1"
+    start_vm_on_connect      = false # Disabled for testing
+    validate_environment     = true # Enabled for testing
+  }
+
+  # Application Group Configuration
+  application_group = {
+    # name                       = null  # Uses computed naming: ag-test-avd-eus2
+    friendly_name                = "Test AVD Desktop Application Group"
+    description                  = "Test Azure Virtual Desktop Desktop Application Group"
+    type                         = "Desktop"
+    default_desktop_display_name = "Test Desktop Environment"
+  }
+
+  # AVD Insights disabled for testing
+  enable_insights = false
+
+  # RBAC enabled for testing Start VM on Connect
+  enable_start_vm_rbac = true
+
+  # Network Configuration with new IP ranges
+  create_virtual_network = true
+  connect_to_hub         = true
+  virtual_network = {
+    # name        = "vnet-test-avd-eus2"      # Override computed naming if needed
+    address_space = ["10.40.0.0/16"] # New IP range
+    subnets = {
+      "snet-test-desktop-eus2" = {  # Auto-computed from location
+        address_prefixes  = ["10.40.1.0/24"]
+        service_endpoints = ["Microsoft.KeyVault", "Microsoft.Storage"] # Added Microsoft.Storage for FSLogix
+      }
+      "snet-test-admin-desktop-eus2" = {  # Auto-computed from location
+        address_prefixes  = ["10.40.2.0/24"]
+        service_endpoints = ["Microsoft.Storage"]
+      }
+      "snet-test-shared-eus2" = {  # Auto-computed from location
+        address_prefixes  = ["10.40.3.0/24"]
+        service_endpoints = ["Microsoft.Storage"] # Added Microsoft.Storage for FSLogix
+      }
+    }
+  }
+
+  # FSLogix
+  fslogix = {
+    enabled                 = true
+    profile_share_size_gb   = 100
+    container_share_size_gb = 100
+    enable_private_endpoint = false
+  }
+
+  # Simplified Scaling Plan for testing
+  scaling_plan = {
+    name      = "scaling-plan-test-eus2"  # Required field for scaling plan
+    time_zone = "Central Europe Standard Time" # Different timezone for testing
+    schedules = {
+      "Weekday" = {
+        name                                 = "Weekday"
+        days_of_week                         = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]
+        ramp_up_start_time                   = "07:00"
+        ramp_up_load_balancing_algorithm     = "BreadthFirst"
+        ramp_up_minimum_hosts_percent        = 40
+        ramp_up_capacity_threshold_percent   = 80
+        peak_start_time                      = "08:00"
+        peak_load_balancing_algorithm        = "DepthFirst"
+        ramp_down_start_time                 = "19:00"
+        ramp_down_load_balancing_algorithm   = "DepthFirst"
+        ramp_down_minimum_hosts_percent      = 5
+        ramp_down_capacity_threshold_percent = 90
+        ramp_down_force_logoff_users         = false
+        ramp_down_wait_time_minutes          = 15
+        ramp_down_notification_message       = "This desktop is shutting down in 15 minutes. Please save your work and logout."
+        ramp_down_stop_hosts_when            = "ZeroActiveSessions"
+        off_peak_start_time                  = "20:00"
+        off_peak_load_balancing_algorithm    = "DepthFirst"
+      },
+      "Weekend" = {
+        name                                 = "Weekend"
+        days_of_week                         = ["Saturday", "Sunday"]
+        ramp_up_start_time                   = "08:00"
+        ramp_up_load_balancing_algorithm     = "DepthFirst" # Different algorithm
+        ramp_up_minimum_hosts_percent        = 25 # Lower percentage for testing
+        ramp_up_capacity_threshold_percent   = 60 # Lower threshold
+        peak_start_time                      = "09:00"
+        peak_load_balancing_algorithm        = "BreadthFirst"
+        ramp_down_start_time                 = "17:00" # Earlier ramp down
+        ramp_down_load_balancing_algorithm   = "BreadthFirst"
+        ramp_down_minimum_hosts_percent      = 0 # Zero for testing
+        ramp_down_capacity_threshold_percent = 75
+        ramp_down_force_logoff_users         = true # Enabled for testing
+        ramp_down_wait_time_minutes          = 5 # Shorter wait time
+        ramp_down_notification_message       = "Test environment shutting down in 5 minutes."
+        ramp_down_stop_hosts_when            = "ZeroSessions" # Different setting
+        off_peak_start_time                  = "18:00"
+        off_peak_load_balancing_algorithm    = "DepthFirst"
+      }
+    }
+  }
+}
+
+# Azure Image Builder Configuration - Same as prod
+aib_config = {
+  enabled = true
+
+  # Storage configuration  
+  enable_file_share        = true
+  file_share_quota_gb      = 100
+  enable_private_endpoints = false
+
+  # Replication to East US 2 for test region
+  replication_regions = ["East US 2", "UK South"]
+
+  # Custom AVD image with Windows 11 + Microsoft 365
+  images = {
+    "avd-win11-m365" = {
+      name        = "avd-win11-m365"
+      description = "Windows 11 Multi-session with Microsoft 365 Apps for AVD - Test"
+      os_type     = "Windows"
+
+      # VM specifications for building
+      vm_size               = "Standard_E2as_v6"
+      os_disk_size_gb       = 127
+      build_timeout_minutes = 300
+
+      # Image specifications
+      hyper_v_generation          = "V2"
+      trusted_launch_supported    = true
+      enable_nvme_disk_controller = true
+
+      # Source image
+      publisher = "MicrosoftWindowsDesktop"
+      offer     = "office-365"
+      sku       = "win11-24h2-avd-m365"
+      version   = "latest"
+    }
+  }
+}
+
+# Management Configuration
+enable_automation_account = false
+

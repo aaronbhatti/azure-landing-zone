@@ -1,0 +1,141 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "imageTemplateName": {
+            "type": "string"
+        },
+        "api-version": {
+            "type": "string"
+        },
+        "svclocation": {
+            "type": "string"
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "name": "[parameters('imageTemplateName')]",
+            "type": "Microsoft.VirtualMachineImages/imageTemplates",
+            "apiVersion": "[parameters('api-version')]",
+            "location": "[parameters('svclocation')]",
+            "dependsOn": [],
+            "tags": {
+                "Environment": "${environment}",
+                "Workload": "Azure Image Builder",
+                "ImageTemplate": "true",
+                "userIdentity": "enabled"
+            },
+            "identity": {
+                "type": "UserAssigned",
+                "userAssignedIdentities": {
+                    "${managed_identity_id}": {}
+                }
+            },
+            "properties": {
+                "buildTimeoutInMinutes": ${build_timeout_minutes},
+                "stagingResourceGroup": "/subscriptions/${subscription_id}/resourceGroups/rg-${resource_prefix}-aib-${location_short}-staging-${environment}",
+                "vmProfile": {
+                    "vmSize": "${vm_size}",
+                    "osDiskSizeGB": ${os_disk_size_gb}
+                },
+                "source": {
+                    "type": "PlatformImage",
+                    "publisher": "${publisher}",
+                    "offer": "${offer}",
+                    "sku": "${sku}",
+                    "version": "${version}"
+                },
+                "customize": [
+                    %{ for customization in customizations ~}
+                    {
+                        %{ if customization.type == "WindowsUpdate" ~}
+                        "name": "${customization.name}",
+                        "type": "WindowsUpdate",
+                        "searchCriteria": "${customization.searchCriteria}",
+                        %{ if can(customization.filters) && length(customization.filters) > 0 ~}
+                        "filters": [
+                            %{ for idx, filter in customization.filters ~}
+                            "${filter}"${idx < length(customization.filters) - 1 ? "," : ""}
+                            %{ endfor ~}
+                        ],
+                        %{ endif ~}
+                        %{ if can(customization.updateLimit) ~}
+                        "updateLimit": ${customization.updateLimit}
+                        %{ endif ~}
+                        %{ endif ~}
+                        
+                        %{ if customization.type == "WindowsRestart" ~}
+                        "name": "${customization.name}",
+                        "type": "WindowsRestart",
+                        %{ if can(customization.restartTimeout) ~}
+                        "restartTimeout": "${customization.restartTimeout}"
+                        %{ endif ~}
+                        %{ endif ~}
+                        
+                        %{ if customization.type == "PowerShell" ~}
+                        "name": "${customization.name}",
+                        "type": "PowerShell",
+                        %{ if can(customization.inline) ~}
+                        "inline": [
+                            %{ for idx, cmd in customization.inline ~}
+                            "${cmd}"${idx < length(customization.inline) - 1 ? "," : ""}
+                            %{ endfor ~}
+                        ],
+                        %{ endif ~}
+                        %{ if can(customization.scriptUri) ~}
+                        "scriptUri": "${customization.scriptUri}",
+                        %{ endif ~}
+                        %{ if can(customization.sha256Checksum) ~}
+                        "sha256Checksum": "${customization.sha256Checksum}",
+                        %{ endif ~}
+                        %{ if can(customization.runElevated) ~}
+                        "runElevated": ${customization.runElevated ? "true" : "false"},
+                        %{ endif ~}
+                        %{ if can(customization.runAsSystem) ~}
+                        "runAsSystem": ${customization.runAsSystem ? "true" : "false"}
+                        %{ endif ~}
+                        %{ endif ~}
+                        
+                        %{ if customization.type == "File" ~}
+                        "name": "${customization.name}",
+                        "type": "File",
+                        %{ if can(customization.destination) ~}
+                        "destination": "${customization.destination}",
+                        %{ endif ~}
+                        %{ if can(customization.scriptUri) ~}
+                        "sourceUri": "${customization.scriptUri}",
+                        %{ endif ~}
+                        %{ if can(customization.sha256Checksum) ~}
+                        "sha256Checksum": "${customization.sha256Checksum}"
+                        %{ endif ~}
+                        %{ endif ~}
+                    }${customization != customizations[length(customizations) - 1] ? "," : ""}
+                    %{ endfor ~}
+                    ,{
+                        "name": "customBusinessApplications",
+                        "type": "PowerShell",
+                        "runAsSystem": true,
+                        "runElevated": true,
+                        "scriptUri": "${script_uri}",
+                        "sha256Checksum": "${script_checksum}"
+                    }
+                ],
+                "distribute": [
+                    {
+                        "type": "SharedImage",
+                        "galleryImageId": "${gallery_image_id}",
+                        "runOutputName": "[parameters('imageTemplateName')]",
+                        "artifactTags": {
+                            "source": "azureVmImageBuilder",
+                            "baseosimg": "windows11",
+                            "environment": "${environment}",
+                            "organization": "${resource_prefix}"
+                        },
+                        "replicationRegions": ${replication_regions}
+                    }
+                ]
+            }
+        }
+    ]
+}

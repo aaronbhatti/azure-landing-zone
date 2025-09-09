@@ -1,0 +1,256 @@
+{
+  "$schema": "https://raw.githubusercontent.com/Azure/Azure-Landing-Zones-Library/main/schemas/architecture_definition.json",
+  "name": "custom",
+  "management_groups": [
+    {
+      "id": "root",
+      "display_name": "CNNECT",
+      "parent_id": null,
+      "archetypes": ["root"],
+      "exists": false
+    },
+    {
+      "id": "platform",
+      "display_name": "Platform",
+      "parent_id": "root",
+      "archetypes": ["platform"],
+      "exists": false
+    },
+    {
+      "id": "landingzones",
+      "display_name": "Landing Zones",
+      "parent_id": "root",
+      "archetypes": ["landing_zones"],
+      "exists": false
+    },
+    {
+      "id": "connectivity",
+      "display_name": "Connectivity",
+      "parent_id": "platform",
+      "archetypes": ["connectivity"],
+      "exists": false
+    },
+    {
+      "id": "identity",
+      "display_name": "Identity",
+      "parent_id": "platform",
+      "archetypes": ["identity"],
+      "exists": false
+    },
+    {
+      "id": "management",
+      "display_name": "Management",
+      "parent_id": "platform",
+      "archetypes": ["management"],
+      "exists": false
+    },
+    {
+      "id": "avd",
+      "display_name": "Azure Virtual Desktop",
+      "parent_id": "landingzones",
+      "archetypes": ["corp"],
+      "exists": false
+    },
+    {
+      "id": "infrastructure",
+      "display_name": "Infrastructure",
+      "parent_id": "landingzones",
+      "archetypes": ["corp"],
+      "exists": false
+    },
+    {
+      "id": "sandbox",
+      "display_name": "Sandbox",
+      "parent_id": "root",
+      "archetypes": ["sandbox"],
+      "exists": false
+    },
+    {
+      "id": "decommissioned",
+      "display_name": "Decommissioned",
+      "parent_id": "root",
+      "archetypes": ["decommissioned"],
+      "exists": false
+    }
+  ],
+  "archetypes": {
+    "root": {
+      "policy_assignments": [
+        "Audit-ResourceRGLocation",
+        "Audit-TrustedLaunch",
+        "Audit-UnusedResourcesCostOptimization",
+        "Deny-Classic-Resources",
+        "Deny-HybridNetworking",
+        "Deploy-AzActivity-Log",
+        "Deploy-ASC-Monitoring",
+        "Deploy-MDFC-Config",
+        "Deploy-Diag-LogsCat",
+        "Deploy-vmArc-ChangeTrack",
+        "Deploy-vmHybr-Monitoring",
+        "Enable-DDoS-VNET",
+        "Enforce-ALZ-Decomm",
+        "Enforce-ALZ-Sandbox"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "platform": {
+      "policy_assignments": [
+        "DenyAction-DeleteUAMIAMA",
+        "Deploy-MDFC-DefSQL-AMA",
+        "Deploy-VM-ChangeTrack",
+        "Deploy-VM-Monitoring",
+        "Deploy-vmArc-ChangeTrack",
+        "Deploy-vmHybr-Monitoring",
+        "Deploy-VMSS-ChangeTrack",
+        "Deploy-VMSS-Monitoring",
+        "Enable-AUM-CheckUpdates",
+        "Enforce-ASR",
+        "Enforce-Encrypt-CMK0",
+        "Enforce-GR-APIM0",
+        "Enforce-GR-AppServices0",
+        "Enforce-GR-Automation0",
+        "Enforce-GR-BotService0",
+        "Enforce-GR-CogServ0",
+        "Enforce-GR-Compute0",
+        "Enforce-GR-ContApps0",
+        "Enforce-GR-ContInst0",
+        "Enforce-GR-ContReg0",
+        "Enforce-GR-CosmosDb0",
+        "Enforce-GR-DataExpl0",
+        "Enforce-GR-DataFactory0",
+        "Enforce-GR-EventGrid0",
+        "Enforce-GR-EventHub0",
+        "Enforce-GR-KeyVault",
+        "Enforce-GR-KeyVaultSup0",
+        "Enforce-GR-Kubernetes0",
+        "Enforce-GR-MachLearn0",
+        "Enforce-GR-MySQL0",
+        "Enforce-GR-Network0",
+        "Enforce-GR-OpenAI0",
+        "Enforce-GR-PostgreSQL0",
+        "Enforce-GR-ServiceBus0",
+        "Enforce-GR-SQL0",
+        "Enforce-GR-Storage0",
+        "Enforce-GR-Synapse0",
+        "Enforce-GR-VirtualDesk0",
+        "Enforce-Subnet-Private"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "landing_zones": {
+      "policy_assignments": [
+        "Audit-AppGW-WAF",
+        "Deny-Classic-Resources",
+        "Deny-IP-forwarding",
+        "Deny-MgmtPorts-Internet",
+        "Deny-Priv-Esc-AKS",
+        "Deny-Privileged-AKS",
+        "Deny-Storage-http",
+        "Deny-Subnet-Without-Nsg",
+        "Deploy-AzSqlDb-Auditing",
+        "Deploy-MDFC-DefSQL-AMA",
+        "Deploy-SQL-TDE",
+        "Deploy-SQL-Threat",
+        "Deploy-VM-ChangeTrack",
+        "Deploy-VM-Monitoring",
+        "Deploy-VMSS-ChangeTrack",
+        "Deploy-VMSS-Monitoring",
+        "Deploy-vmArc-ChangeTrack",
+        "Deploy-vmHybr-Monitoring",
+        "Enable-AUM-CheckUpdates",
+        "Enable-DDoS-VNET",
+        "Enforce-AKS-HTTPS",
+        "Enforce-ASR",
+        "Enforce-Encrypt-CMK0",
+        "Enforce-GR-APIM0",
+        "Enforce-GR-AppServices0",
+        "Enforce-GR-Automation0",
+        "Enforce-GR-BotService0",
+        "Enforce-GR-CogServ0",
+        "Enforce-GR-Compute0",
+        "Enforce-GR-ContApps0",
+        "Enforce-GR-ContInst0",
+        "Enforce-GR-ContReg0",
+        "Enforce-GR-CosmosDb0",
+        "Enforce-GR-DataExpl0",
+        "Enforce-GR-DataFactory0",
+        "Enforce-GR-EventGrid0",
+        "Enforce-GR-EventHub0",
+        "Enforce-GR-KeyVault",
+        "Enforce-GR-KeyVaultSup0",
+        "Enforce-GR-Kubernetes0",
+        "Enforce-GR-MachLearn0",
+        "Enforce-GR-MySQL0",
+        "Enforce-GR-Network0",
+        "Enforce-GR-OpenAI0",
+        "Enforce-GR-PostgreSQL0",
+        "Enforce-GR-SQL0",
+        "Enforce-GR-ServiceBus0",
+        "Enforce-GR-Storage0",
+        "Enforce-GR-Synapse0",
+        "Enforce-GR-VirtualDesk0",
+        "Enforce-Subnet-Private",
+        "Enforce-TLS-SSL-Q225"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "connectivity": {
+      "policy_assignments": [
+        "Enable-DDoS-VNET"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "identity": {
+      "policy_assignments": [
+        "Deny-MgmtPorts-Internet",
+        "Deny-Public-IP",
+        "Deny-Subnet-Without-Nsg"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "management": {
+      "policy_assignments": [],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "corp": {
+      "policy_assignments": [
+        "Audit-PeDnsZones",
+        "Deny-HybridNetworking",
+        "Deny-Public-Endpoints",
+        "Deny-Public-IP-On-NIC",
+        "Deploy-Private-DNS-Zones"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "decommissioned": {
+      "policy_assignments": [
+        "Enforce-ALZ-Decomm"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    },
+    "sandbox": {
+      "policy_assignments": [
+        "Enforce-ALZ-Sandbox"
+      ],
+      "policy_definitions": [],
+      "policy_set_definitions": [],
+      "role_definitions": []
+    }
+  }
+}
