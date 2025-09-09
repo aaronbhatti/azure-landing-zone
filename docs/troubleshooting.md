@@ -31,7 +31,7 @@ az account list-locations --output table
 
 **Error**: `Failed to initialize provider`
 
-```
+```hcl
 Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client: obtain subscription from Azure CLI: parsing json result from the Azure CLI: waiting for the Azure CLI: exit status 1
 ```
 
