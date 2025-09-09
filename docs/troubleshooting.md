@@ -30,12 +30,15 @@ az account list-locations --output table
 ### Terraform Initialization Problems
 
 **Error**: `Failed to initialize provider`
+
 ```
 Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client: obtain subscription from Azure CLI: parsing json result from the Azure CLI: waiting for the Azure CLI: exit status 1
 ```
 
 **Solutions**:
+
 1. Re-authenticate with Azure:
+
    ```bash
    az logout
    az login
@@ -43,6 +46,7 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
    ```
 
 2. Clear Terraform cache:
+
    ```bash
    rm -rf .terraform
    rm .terraform.lock.hcl
@@ -50,6 +54,7 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
    ```
 
 3. Check provider version compatibility:
+
    ```hcl
    terraform {
      required_providers {
@@ -66,7 +71,9 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
 **Error**: `Authorization failed` or `Insufficient privileges`
 
 **Solutions**:
+
 1. Verify subscription access:
+
    ```bash
    az account list --output table
    az role assignment list --assignee $(az account show --query user.name -o tsv)
@@ -77,6 +84,7 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
    - User Access Administrator for RBAC assignments
 
 3. Register required providers:
+
    ```bash
    az provider register -n Microsoft.VirtualMachineImages
    az provider register -n Microsoft.Compute
@@ -89,13 +97,16 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
 **Error**: `Resource already exists` with VM names like DC01, WEB01
 
 **Solutions**:
+
 1. Check existing resources:
+
    ```bash
    az vm list --query "[].name" --output table
    az network nic list --query "[].name" --output table
    ```
 
 2. Use different resource group or change `vm_name_prefix`:
+
    ```hcl
    virtual_machines = {
      "dc" = {
@@ -105,6 +116,7 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
    ```
 
 3. Clean up existing resources if safe:
+
    ```bash
    az vm delete --name DC01 --resource-group rg-identity-prod-uks --yes
    az network nic delete --name DC01-nic01 --resource-group rg-identity-prod-uks
@@ -117,13 +129,16 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
 **Error**: `VM size not available in availability zone`
 
 **Solutions**:
+
 1. Check available VM sizes:
+
    ```bash
    az vm list-sizes --location "UK South" --output table
    az vm list-skus --location "UK South" --zone --output table
    ```
 
 2. Use different VM size or availability zone:
+
    ```hcl
    virtual_machines = {
      "app" = {
@@ -138,6 +153,7 @@ Error: Failed to configure the Microsoft Azure Provider: building AzureRM Client
 **Error**: `Network interface already attached` or NIC creation failures
 
 **Diagnostic Steps**:
+
 ```bash
 # Check NIC status
 az network nic list --resource-group rg-spoke-prod-uks --output table
@@ -150,7 +166,9 @@ az network nic ip-config list --nic-name WEB01-nic01 --resource-group rg-spoke-p
 ```
 
 **Solutions**:
+
 1. Verify subnet configuration:
+
    ```hcl
    subnets = {
      "snet-web" = {
@@ -163,6 +181,7 @@ az network nic ip-config list --nic-name WEB01-nic01 --resource-group rg-spoke-p
    ```
 
 2. Check static IP conflicts:
+
    ```hcl
    network_interfaces = [
      {
@@ -174,6 +193,7 @@ az network nic ip-config list --nic-name WEB01-nic01 --resource-group rg-spoke-p
    ```
 
 3. Verify NSG rules allow traffic:
+
    ```bash
    az network nsg rule list --resource-group rg-spoke-prod-uks --nsg-name nsg-web --output table
    ```
@@ -183,6 +203,7 @@ az network nic ip-config list --nic-name WEB01-nic01 --resource-group rg-spoke-p
 **Error**: `Disk already attached` or LUN conflicts
 
 **Diagnostic Steps**:
+
 ```bash
 # Check disk status
 az disk list --resource-group rg-spoke-prod-uks --output table
@@ -192,7 +213,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 ```
 
 **Solutions**:
+
 1. Verify unique LUN assignments:
+
    ```hcl
    data_disks = [
      {
@@ -207,11 +230,13 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 2. Check disk attachment status:
+
    ```bash
    az vm disk detach --name WEB01-datadisk01 --resource-group rg-spoke-prod-uks --vm-name WEB01
    ```
 
 3. Resolve storage account conflicts:
+
    ```hcl
    data_disks = [
      {
@@ -226,12 +251,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: `Write Accelerator not supported`
 
 **Solutions**:
+
 1. Check VM series support:
+
    ```bash
    az vm list-sizes --location "UK South" --query "[?contains(name, 'M')] | [?contains(name, 's')]"
    ```
 
 2. Verify disk requirements:
+
    ```hcl
    data_disks = [
      {
@@ -250,18 +278,22 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Spoke VMs cannot reach hub services or internet
 
 **Diagnostic Steps**:
+
 1. Check routing tables:
+
    ```bash
    az network route-table list --output table
    az network route-table route list --route-table-name rt-spoke --resource-group rg-connectivity-prod-uks
    ```
 
 2. Verify peering status:
+
    ```bash
    az network vnet peering list --vnet-name vnet-hub-prod-uks --resource-group rg-connectivity-prod-uks
    ```
 
 3. Test connectivity:
+
    ```bash
    # From VM in spoke
    ping 10.0.0.4    # Azure Firewall private IP
@@ -269,12 +301,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 **Solutions**:
+
 1. Check firewall rules:
+
    ```bash
    az network firewall policy rule-collection-group list --policy-name pol-azfw-prod-uks --resource-group rg-connectivity-prod-uks
    ```
 
 2. Verify route table assignment:
+
    ```hcl
    subnets = {
      "snet-workload" = {
@@ -289,13 +324,16 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Traffic blocked by Azure Firewall
 
 **Solutions**:
+
 1. Check firewall logs:
+
    ```bash
    az monitor log-analytics query --workspace workspace-id \
      --analytics-query "AzureDiagnostics | where Category == 'AzureFirewallApplicationRule' | limit 50"
    ```
 
 2. Add required firewall rules:
+
    ```hcl
    application_rule_collections = [
      {
@@ -328,12 +366,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Cannot resolve domain names from VMs
 
 **Solutions**:
+
 1. Check DNS settings:
+
    ```bash
    az network vnet show --name vnet-spoke-prod-uks --resource-group rg-spoke-prod-uks --query "dhcpOptions.dnsServers"
    ```
 
 2. Configure custom DNS:
+
    ```hcl
    virtual_network = {
      dns_servers = ["10.1.1.4", "10.1.1.5"]  # Domain controller IPs
@@ -341,6 +382,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 3. Verify domain controller connectivity:
+
    ```bash
    # From VM
    nslookup contoso.com 10.1.1.4
@@ -354,7 +396,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: `InvalidHeaderValue: The value for one of the HTTP headers is not in the correct format`
 
 **Solutions**:
+
 1. Check storage account network access rules:
+
    ```hcl
    network_rules = {
      default_action = "Allow"  # Temporary for initial deployment
@@ -363,6 +407,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 2. Remove metadata from Premium FileStorage file shares:
+
    ```hcl
    resource "azurerm_storage_share" "fslogix_profiles" {
      name               = "profiles"
@@ -376,7 +421,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: `SubnetsHaveNoServiceEndpointsConfigured: Microsoft.Storage`
 
 **Solutions**:
+
 1. Add Microsoft.Storage service endpoint to AVD subnets:
+
    ```hcl
    subnets = {
      "snet-desktop" = {
@@ -393,7 +440,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Root Cause**: Known issue with AVM pattern module version 0.3.x where tags are not properly merged
 
 **Solutions**:
+
 1. Update to latest module version:
+
    ```hcl
    module "avd_management_plane" {
      source  = "Azure/avm-ptn-avd-lza-managementplane/azurerm"
@@ -402,6 +451,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 2. Verify tag parameters are correctly named:
+
    ```hcl
    virtual_desktop_host_pool_tags         = local.avd_tags
    virtual_desktop_workspace_tags         = local.avd_tags  
@@ -416,7 +466,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Image templates and definitions using incorrect case (e.g., "Test" instead of "test")
 
 **Solutions**:
+
 1. Ensure consistent lowercase naming in AIB module:
+
    ```hcl
    # In AIB naming.tf
    env_prefix = lower(var.environment)
@@ -430,7 +482,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: `"81.129.180.16/32" must start with IPV4 address and/or slash, number of bits (0-30)`
 
 **Solutions**:
+
 1. Remove /32 CIDR notation for single IP addresses:
+
    ```hcl
    # In main.tf
    combined_allow_list_ip = concat(
@@ -446,12 +500,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Poor disk performance despite Premium SSD
 
 **Solutions**:
+
 1. Check VM series support for Premium storage:
+
    ```bash
    az vm list-sizes --location "UK South" --query "[?contains(name, 's')]" --output table
    ```
 
 2. Verify disk caching:
+
    ```hcl
    data_disks = [
      {
@@ -465,6 +522,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 3. Monitor disk metrics:
+
    ```bash
    az monitor metrics list --resource /subscriptions/.../disks/WEB01-datadisk01 \
      --metric "Disk Read IOPS" --interval PT1M
@@ -475,17 +533,21 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Disk encryption failures with customer-managed keys
 
 **Solutions**:
+
 1. Verify Key Vault permissions:
+
    ```bash
    az keyvault show --name kv-security-prod-uks --query "properties.accessPolicies[?permissions.keys[?contains(@, 'decrypt')]]"
    ```
 
 2. Check disk encryption set:
+
    ```bash
    az disk-encryption-set show --name des-security-prod-uks --resource-group rg-security-prod-uks
    ```
 
 3. Verify key vault key:
+
    ```hcl
    disk_encryption_set_id = "/subscriptions/.../diskEncryptionSets/des-security-prod-uks"
    
@@ -505,7 +567,9 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Domain controllers not responding or replicating
 
 **Diagnostic Steps**:
+
 1. Check DC connectivity:
+
    ```bash
    # From domain controller
    dcdiag /a /e /v
@@ -513,13 +577,16 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 2. Verify DNS configuration:
+
    ```bash
    nslookup contoso.com
    nslookup _ldap._tcp.contoso.com
    ```
 
 **Solutions**:
+
 1. Check data disk for AD DS:
+
    ```hcl
    data_disks = [
      {
@@ -531,6 +598,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 2. Verify network connectivity:
+
    ```bash
    # Required ports for AD DS
    telnet dc02 389   # LDAP
@@ -543,13 +611,16 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Hybrid identity synchronization failures
 
 **Solutions**:
+
 1. Check outbound connectivity:
+
    ```bash
    # From Azure AD Connect server
    Test-NetConnection login.microsoftonline.com -Port 443
    ```
 
 2. Verify service account permissions:
+
    ```powershell
    # Check sync service account
    Get-ADUser -Identity "MSOL_*" -Properties *
@@ -564,19 +635,23 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 > **⚠️ Note**: The landing zone uses audit policies for backup compliance monitoring. Backup protection must be configured through spoke module settings or manual assignment.
 
 **Solutions**:
+
 1. **Enable backup via spoke module** (Recommended):
+
    ```hcl
    # In spoke configuration
    enable_backup = true
    ```
 
 2. **Check compliance in Azure Policy**:
+
    ```bash
    # View policy compliance in Azure Portal
    # Policy > Compliance > Search for "Backup Audit" policies
    ```
 
 3. **Manual backup protection** (if needed):
+
    ```bash
    az backup protection enable-for-vm \
      --resource-group rg-spoke-prod-uks \
@@ -586,6 +661,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 4. **Check backup policies are available**:
+
    ```bash
    az backup policy list --resource-group rg-management-prod-uks --vault-name rsv-backup-prod-uks
    ```
@@ -597,12 +673,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Cannot create backup items
 
 **Solutions**:
+
 1. Verify vault permissions:
+
    ```bash
    az role assignment list --assignee $(az account show --query user.name -o tsv) --scope /subscriptions/.../vaults/rsv-backup-prod-uks
    ```
 
 2. Check vault cross-region settings:
+
    ```hcl
    backup_config = {
      cross_region_restore_enabled = true
@@ -617,13 +696,16 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: High CPU or memory usage, slow response times
 
 **Diagnostic Steps**:
+
 1. Check VM metrics:
+
    ```bash
    az monitor metrics list --resource /subscriptions/.../virtualMachines/WEB01 \
      --metric "Percentage CPU" --interval PT5M
    ```
 
 2. Analyze performance counters:
+
    ```bash
    # In Azure Monitor Log Analytics
    Perf
@@ -633,12 +715,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 **Solutions**:
+
 1. Scale up VM size:
+
    ```hcl
    vm_size = "Standard_D8s_v5"  # More CPU/memory
    ```
 
 2. Enable accelerated networking:
+
    ```hcl
    network_interfaces = [
      {
@@ -648,6 +733,7 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
    ```
 
 3. Optimize disk performance:
+
    ```hcl
    data_disks = [
      {
@@ -662,17 +748,21 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: High latency or packet loss between tiers
 
 **Solutions**:
+
 1. Check placement groups:
+
    ```bash
    az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "virtualMachineScaleSet"
    ```
 
 2. Use proximity placement groups for low latency:
+
    ```hcl
    proximity_placement_group_id = "/subscriptions/.../proximityPlacementGroups/ppg-app-tier"
    ```
 
 3. Enable accelerated networking:
+
    ```hcl
    enable_accelerated_networking = true  # Reduces latency
    ```
@@ -683,18 +773,31 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 
 **Error**: Logs not flowing to Log Analytics workspace
 
+**💡 Note**: With AMA integration, monitoring setup is now automatic via Azure Policy when both `management_config.enabled = true` and `core_config.enabled = true`.
+
 **Solutions**:
-1. Check Azure Monitor Agent:
+
+1. Check Azure Monitor Agent installation (automatic via policy):
+
    ```bash
    az vm extension show --vm-name WEB01 --resource-group rg-spoke-prod-uks --name AzureMonitorWindowsAgent
    ```
 
-2. Verify data collection rules:
+2. Verify data collection rules (auto-created by management module):
+
    ```bash
    az monitor data-collection rule list --resource-group rg-management-prod-uks
+   # Should show: dcr-vm-insights, dcr-change-tracking, dcr-defender-sql
    ```
 
-3. Check workspace permissions:
+3. Check policy compliance for automatic agent deployment:
+
+   ```bash
+   az policy state list --resource-group rg-spoke-prod-uks --query "[?contains(policyDefinitionName,'AMA') || contains(policyDefinitionName,'Monitor')]"
+   ```
+
+4. Verify workspace permissions (auto-configured by UAMI):
+
    ```bash
    az role assignment list --scope /subscriptions/.../workspaces/law-management-prod-uks
    ```
@@ -704,12 +807,15 @@ az vm show --name WEB01 --resource-group rg-spoke-prod-uks --query "storageProfi
 **Error**: Security events not appearing in workspace
 
 **Solutions**:
+
 1. Verify security solution installation:
+
    ```bash
    az vm extension list --vm-name WEB01 --resource-group rg-spoke-prod-uks --query "[?name=='MicrosoftDefenderForServers']"
    ```
 
 2. Check data collection configuration:
+
    ```hcl
    # In Log Analytics workspace
    solutions = [
@@ -768,6 +874,7 @@ az monitor log-analytics query --workspace <workspace-id> \
 ### Emergency Procedures
 
 1. **VM Not Responding**:
+
    ```bash
    az vm restart --name VM01 --resource-group rg-spoke-prod-uks
    az vm deallocate --name VM01 --resource-group rg-spoke-prod-uks
@@ -781,6 +888,7 @@ az monitor log-analytics query --workspace <workspace-id> \
    - Use Azure Bastion for access
 
 3. **Complete Environment Recovery**:
+
    ```bash
    # Restore from backup
    az backup restore restore-disks --resource-group recovery-rg \

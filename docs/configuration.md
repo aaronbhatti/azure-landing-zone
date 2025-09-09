@@ -29,7 +29,77 @@ aib_subscription_id         = "subscription-id"  # Azure Image Builder
 
 ## Component Configuration
 
-### 1. Connectivity Configuration
+### 1. Core Governance Configuration
+
+The core governance layer deploys Azure Landing Zone (ALZ) management groups and policies:
+
+```hcl
+core_config = {
+  enabled                       = true
+  management_group_display_name = "CNNECT"               # Root management group name  
+  management_group_id           = "alz"                  # Management group ID
+  management_group_parent_id    = null                   # Use tenant root (recommended)
+  enable_policy_assignments     = true                   # Deploy ALZ policies
+  security_contact_email        = null                   # For security alerts (optional)
+  
+  # Policy default values - automatically populated by management module integration
+  policy_default_values = {
+    # Azure Monitor Agent (AMA) integration values are automatically configured
+    # Manual policy parameter configuration is NO LONGER REQUIRED
+  }
+}
+```
+
+### 2. Management Layer Configuration
+
+The management layer provides monitoring, logging, and automation capabilities with built-in **Azure Monitor Agent (AMA) integration**:
+
+```hcl
+management_config = {
+  enabled = true
+  
+  # Log Analytics Workspace Configuration
+  log_analytics = {
+    retention_in_days = 30         # Log retention (30-730 days)
+    sku               = "PerGB2018" # Pricing tier
+  }
+
+  # Automation Account Configuration
+  automation_account = {
+    sku = "Basic"  # Basic or Free tier
+  }
+}
+
+# Optional: Disable automation account globally
+enable_automation_account = false
+```
+
+#### 🔄 Azure Monitor Agent (AMA) Automatic Integration
+
+When both `management_config.enabled = true` and `core_config.enabled = true`, the system automatically:
+
+**✅ Creates AMA Infrastructure:**
+
+- Log Analytics Workspace with VM Insights and Container Insights solutions
+- Data Collection Rules for VM monitoring, change tracking, and Defender for SQL
+- User-Assigned Managed Identity (`uami-ama`) for secure agent authentication
+- Microsoft Sentinel onboarding for security monitoring
+
+**✅ Configures ALZ Policies:**
+
+- Automatically populates policy parameters with management resource IDs
+- Enables automatic VM agent deployment via Azure Policy
+- Configures centralized diagnostic data collection
+- Integrates with Microsoft Defender for Cloud monitoring
+
+**🎯 Benefits:**
+
+- **Zero Manual Configuration**: No need to manually configure policy parameters
+- **Automatic Compliance**: All VMs automatically get monitoring agents
+- **Centralized Monitoring**: All logs flow to the central Log Analytics workspace
+- **Security Integration**: Built-in security monitoring and alerting
+
+### 3. Connectivity Configuration
 
 ```hcl
 connectivity_config = {

@@ -94,6 +94,16 @@ variable "default_tags" {
   default     = {}
 }
 
+variable "dependencies" {
+  description = "Dependencies to ensure proper deployment order for policy assignments"
+  type = object({
+    policy_assignments = optional(list(any), [])
+  })
+  default = {
+    policy_assignments = []
+  }
+}
+
 variable "enable_telemetry" {
   description = "Enable telemetry for the module"
   type        = bool

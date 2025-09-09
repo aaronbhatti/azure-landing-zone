@@ -73,7 +73,49 @@ module "core" {
     azurerm.connectivity = azurerm.connectivity
   }
 
-  core_config                  = var.core_config
+  # Merge user core_config with comprehensive dynamic policy defaults for AMA integration
+  core_config = var.management_config.enabled ? merge(var.core_config, {
+    policy_default_values = merge(
+      var.core_config.policy_default_values,
+      {
+        # Log Analytics Workspace for all monitoring policies
+        log_analytics_workspace_id = jsonencode({ 
+          value = "/subscriptions/${var.management_subscription_id}/resourceGroups/${module.management[0].resource_group_name}/providers/Microsoft.OperationalInsights/workspaces/${module.management[0].log_analytics_workspace_name}"
+        })
+        
+        # Azure Monitor Agent (AMA) Data Collection Rules
+        ama_change_tracking_data_collection_rule_id = jsonencode({ 
+          value = "/subscriptions/${var.management_subscription_id}/resourceGroups/${module.management[0].resource_group_name}/providers/Microsoft.Insights/dataCollectionRules/dcr-change-tracking" 
+        })
+        
+        ama_vm_insights_data_collection_rule_id = jsonencode({ 
+          value = "/subscriptions/${var.management_subscription_id}/resourceGroups/${module.management[0].resource_group_name}/providers/Microsoft.Insights/dataCollectionRules/dcr-vm-insights" 
+        })
+        
+        ama_mdfc_sql_data_collection_rule_id = jsonencode({ 
+          value = "/subscriptions/${var.management_subscription_id}/resourceGroups/${module.management[0].resource_group_name}/providers/Microsoft.Insights/dataCollectionRules/dcr-defender-sql" 
+        })
+        
+        # User-Assigned Managed Identity for AMA
+        ama_user_assigned_managed_identity_id = jsonencode({ 
+          value = "/subscriptions/${var.management_subscription_id}/resourceGroups/${module.management[0].resource_group_name}/providers/Microsoft.ManagedIdentity/userAssignedIdentities/uami-ama" 
+        })
+        
+        ama_user_assigned_managed_identity_name = jsonencode({ 
+          value = "uami-ama" 
+        })
+      },
+      # Note: Security contact email is not supported in this ALZ version
+      # Future versions may support email_security_contact or similar parameters
+      # Conditionally add automation account ID  
+      var.enable_automation_account && var.management_config.enabled ? {
+        automation_account_id = jsonencode({ 
+          value = module.management[0].automation_account_id 
+        })
+      } : {}
+    )
+  }) : var.core_config
+  
   management_subscription_id   = var.management_subscription_id
   connectivity_subscription_id = var.connectivity_subscription_id
   identity_subscription_id     = var.identity_subscription_id
@@ -82,8 +124,11 @@ module "core" {
   default_tags                 = var.default_tags
   enable_telemetry             = var.enable_telemetry
 
-  # Enhanced monitoring and security integration
-  # Dependencies removed to avoid for_each unknown values
+  # Dependencies - simplified to avoid type consistency issues
+  # The AVM ALZ module will handle dependency resolution internally
+  dependencies = {
+    policy_assignments = []
+  }
 }
 # Connectivity Resources
 module "connectivity" {

@@ -96,7 +96,21 @@ core_config = {
   management_group_id           = "alz"                  # Management group ID (auto-generated if null)
   management_group_parent_id    = null                   # Use tenant root (recommended)
   enable_policy_assignments     = true                   # Deploy ALZ policies
-  security_contact_email        = null                   # For security alerts (optional)
+  security_contact_email        = null                   # For security alerts (optional - not yet supported in current ALZ version)
+  
+  # Policy default values - automatically populated by management module integration
+  # Manual policy parameter configuration is NO LONGER REQUIRED
+  policy_default_values = {
+    # Azure Monitor Agent (AMA) integration values are automatically configured:
+    # - log_analytics_workspace_id: Auto-populated from management module
+    # - ama_change_tracking_data_collection_rule_id: Auto-configured
+    # - ama_vm_insights_data_collection_rule_id: Auto-configured  
+    # - ama_mdfc_sql_data_collection_rule_id: Auto-configured
+    # - ama_user_assigned_managed_identity_id: Auto-configured
+    # - automation_account_id: Auto-configured when automation account is enabled
+    #
+    # Add custom policy overrides here only if needed
+  }
 }
 ```
 
@@ -118,6 +132,28 @@ management_config = {
   }
 }
 ```
+
+### 🔄 Azure Monitor Agent (AMA) Integration
+
+The management layer automatically provisions **Azure Monitor Agent (AMA)** components that integrate with ALZ policies:
+
+**✅ Automatic Components Created:**
+- **Log Analytics Workspace**: Central logging and monitoring
+- **Data Collection Rules (DCRs)**:
+  - `dcr-vm-insights`: VM performance and dependency monitoring
+  - `dcr-change-tracking`: Configuration and file change tracking  
+  - `dcr-defender-sql`: Microsoft Defender for SQL monitoring
+- **User-Assigned Managed Identity**: `uami-ama` for secure agent authentication
+- **Log Analytics Solutions**: VM Insights, Container Insights, Microsoft Sentinel
+
+**✅ Policy Integration Benefits:**
+- **Zero Manual Configuration**: Policy parameters auto-populated from management resources
+- **Automatic VM Monitoring**: All VMs get monitoring agents via policy enforcement
+- **Centralized Logging**: All diagnostic data flows to the Log Analytics workspace
+- **Security Monitoring**: Defender for Cloud integration with AMA data collection
+- **Change Tracking**: File and configuration monitoring across all resources
+
+**🎯 No Action Required:** AMA integration works automatically when both `management_config.enabled = true` and `core_config.enabled = true`
 
 ## HUB NETWORKING CONFIGURATION (Connectivity Layer)
 

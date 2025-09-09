@@ -60,6 +60,12 @@ module "alz" {
   )
 
 
+  # Dependencies to ensure proper deployment order
+  dependencies = var.dependencies
+
+  # Policy default values (typically for log analytics workspace references)
+  policy_default_values = var.core_config.policy_default_values
+
   # Enhanced archetype configuration is handled via policy_assignments_to_modify and defaults
 
   # Policy assignments for connectivity (customize as needed)
@@ -74,7 +80,6 @@ module "alz" {
       }
     }
   }
-
 
   enable_telemetry = var.enable_telemetry
 }

@@ -8,6 +8,7 @@ This repository provides a comprehensive Azure Landing Zone implementation featu
 
 - **🏛️ Core Governance**: Microsoft's official ALZ pattern modules with custom management group names and hierarchy support
 - **⚙️ Management Layer**: Log Analytics, optional Automation Account, and monitoring infrastructure with full diagnostic settings
+- **🔄 Azure Monitor Agent (AMA) Integration**: Automatic policy configuration for centralized VM monitoring, change tracking, and security data collection
 - **🔧 Infrastructure Layer**: Modern Azure Verified Modules with enhanced VM capabilities
 - **🖥️ Advanced VM Support**: Multiple NICs, multiple data disks, high availability configurations
 - **🛡️ Enterprise Backup**: Pre-configured Recovery Services Vaults with tiered backup policies for VMs and Azure Files
