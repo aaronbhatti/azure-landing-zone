@@ -56,6 +56,7 @@ module "management" {
   }
 
   management_config         = var.management_config
+  sentinel_config           = var.sentinel_config
   location                  = var.location
   environment               = var.environment
   default_tags              = merge(var.default_tags, { Environment = var.environment })

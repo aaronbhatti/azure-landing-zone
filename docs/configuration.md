@@ -72,6 +72,13 @@ management_config = {
 
 # Optional: Disable automation account globally
 enable_automation_account = false
+
+# Microsoft Sentinel Configuration (Security Information and Event Management)
+sentinel_config = {
+  enabled                       = false     # Enable/disable Sentinel onboarding (disabled by default)
+  name                          = "default" # Sentinel onboarding name
+  customer_managed_key_enabled  = false     # Enable customer-managed encryption keys
+}
 ```
 
 #### 🔄 Azure Monitor Agent (AMA) Automatic Integration

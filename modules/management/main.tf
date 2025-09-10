@@ -44,8 +44,14 @@ module "alz_management" {
     }
   }
 
-  # Sentinel configuration - required for v0.9.0 (disabled by default)
-  sentinel_onboarding = {}
+  # Sentinel configuration - configurable via variables (disabled by default)
+  # null = disabled, {} = enabled with defaults, {...} = enabled with custom values
+  sentinel_onboarding = var.sentinel_config.enabled ? (
+    var.sentinel_config.name == "default" && var.sentinel_config.customer_managed_key_enabled == false ? {} : {
+      name                          = var.sentinel_config.name != "default" ? var.sentinel_config.name : null
+      customer_managed_key_enabled  = var.sentinel_config.customer_managed_key_enabled != false ? var.sentinel_config.customer_managed_key_enabled : null
+    }
+  ) : null
 
   enable_telemetry = var.enable_telemetry
 

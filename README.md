@@ -7,7 +7,7 @@ A modern, enterprise-ready Terraform implementation of Azure Landing Zones using
 This repository provides a comprehensive Azure Landing Zone implementation featuring:
 
 - **🏛️ Core Governance**: Microsoft's official ALZ pattern modules with custom management group names and hierarchy support
-- **⚙️ Management Layer**: Log Analytics, optional Automation Account, and monitoring infrastructure with full diagnostic settings
+- **⚙️ Management Layer**: Log Analytics, optional Automation Account, Microsoft Sentinel onboarding, and monitoring infrastructure with full diagnostic settings
 - **🔄 Azure Monitor Agent (AMA) Integration**: Automatic policy configuration for centralized VM monitoring, change tracking, and security data collection
 - **🔧 Infrastructure Layer**: Modern Azure Verified Modules with enhanced VM capabilities
 - **🖥️ Advanced VM Support**: Multiple NICs, multiple data disks, high availability configurations
@@ -53,7 +53,7 @@ terraform apply -var-file="environments/my-deployment.tfvars"
 The landing zone implements a **security-first, three-layer architecture**:
 
 - **🏛️ Core Governance**: Management groups, policies, and compliance framework
-- **⚙️ Management Layer**: Log Analytics, optional Automation Account, and monitoring
+- **⚙️ Management Layer**: Log Analytics, optional Automation Account, Microsoft Sentinel onboarding, and monitoring
 - **🔧 Infrastructure Layer**: Hub-spoke networking with Azure Firewall, VPN Gateway, and Bastion
 
 ### Subscription Flexibility

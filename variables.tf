@@ -236,6 +236,24 @@ variable "management_config" {
   }
 }
 
+# Sentinel Configuration
+variable "sentinel_config" {
+  description = "Configuration for Microsoft Sentinel onboarding"
+  type = object({
+    # Enable/disable Sentinel onboarding
+    enabled = optional(bool, false)
+
+    # Sentinel onboarding configuration
+    name                          = optional(string, "default")
+    customer_managed_key_enabled  = optional(bool, false)
+  })
+  default = {
+    enabled                       = false
+    name                          = "default"
+    customer_managed_key_enabled  = false
+  }
+}
+
 # Connectivity Configuration (ALZ Hub and Spoke)
 variable "connectivity_config" {
   description = "Configuration for ALZ hub and spoke connectivity resources"
