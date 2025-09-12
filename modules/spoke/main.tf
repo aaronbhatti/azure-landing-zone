@@ -909,7 +909,7 @@ module "spoke_virtual_machines" {
 
 # Diagnostic Settings for NSG
 resource "azurerm_monitor_diagnostic_setting" "spoke_nsg_diagnostics" {
-  count = var.spoke_config.virtual_network != null ? 1 : 0
+  count = var.spoke_config.virtual_network != null && var.log_analytics_workspace_id != null ? 1 : 0
 
   provider                   = azurerm.spoke
   name                       = "${azurerm_network_security_group.spoke[0].name}-diagnostics"
