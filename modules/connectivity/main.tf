@@ -151,7 +151,7 @@ module "alz_connectivity" {
               allocation_method = "Static"
               sku               = "Standard"
               sku_tier          = "Regional"
-              zones             = ["1", "2", "3"] # Multi-zone for high availability
+              zones             = [] # Zones disabled - not supported in all regions like UK West
             }
           }
 
