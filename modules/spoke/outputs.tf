@@ -122,7 +122,7 @@ output "infra_outputs" {
 output "diagnostic_settings" {
   description = "Diagnostic settings configured for the spoke"
   value = {
-    nsg_diagnostics     = var.spoke_config.virtual_network != null && var.log_analytics_workspace_id != null ? azurerm_monitor_diagnostic_setting.spoke_nsg_diagnostics[0] : null
+    nsg_diagnostics     = var.spoke_config.virtual_network != null ? azurerm_monitor_diagnostic_setting.spoke_nsg_diagnostics[0] : null
     storage_diagnostics = var.spoke_config.enable_storage ? azurerm_monitor_diagnostic_setting.spoke_storage_diagnostics[0] : null
   }
 }
