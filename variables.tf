@@ -12,8 +12,8 @@ variable "environment" {
   description = "The environment name (e.g., dev, test, staging, prod)"
   type        = string
   validation {
-    condition     = contains(["Dev", "Test", "Staging", "Prod"], var.environment)
-    error_message = "Environment must be one of: dev, test, staging or prod"
+    condition     = contains(["Dev", "Test", "Staging", "Prod", "DR"], var.environment)
+    error_message = "Environment must be one of: dev, test, staging, prod or DR"
   }
 }
 
@@ -1064,7 +1064,7 @@ variable "default_tags" {
       can(var.default_tags["Environment"]) &&
       can(var.default_tags["Owner"]) &&
       can(var.default_tags["CostCenter"]) &&
-      contains(["Production", "Development", "Test", "Staging", "Demo"], var.default_tags["Environment"])
+      contains(["Production", "Development", "Test", "Staging", "Demo", "DR"], var.default_tags["Environment"])
     )
     error_message = "default_tags must include 'Environment', 'Owner', and 'CostCenter'. Environment must be one of: Production, Development, Test, Staging, Demo."
   }
