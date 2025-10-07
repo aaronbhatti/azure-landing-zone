@@ -270,7 +270,7 @@ function Disconnect-AllUserSessions {
             $remainingSessions = 0
             foreach ($sessionHost in $sessionHosts) {
                 $sessionHostName = ($sessionHost.Name -split '/')[-1]
-                $sessions = Get-AzWvdUserSession -ResourceGroupName $HostPoolRG -HostPoolName $HostPoolName -SessionHostName $sessionHostName -ErrorAction SilentlyContinue
+                $sessions = @(Get-AzWvdUserSession -ResourceGroupName $HostPoolRG -HostPoolName $HostPoolName -SessionHostName $sessionHostName -ErrorAction SilentlyContinue)
                 $remainingSessions += $sessions.Count
             }
 
@@ -328,7 +328,7 @@ function Remove-SessionHostsFromPool {
     }
 }
 
-# Delete VMs, NICs, and disks
+# Delete VMs, NICs, and disks in parallel
 function Remove-SessionHostVMs {
     param(
         [Parameter(Mandatory)][string]$ResourceGroup,
@@ -339,8 +339,11 @@ function Remove-SessionHostVMs {
     Write-Log "Deleting session host VMs and associated resources..." -Level INFO
 
     try {
+        # Collect all resources to delete
+        $resourcesToDelete = @()
+
         foreach ($vmName in $VMNames) {
-            Write-Log "Processing VM: $vmName" -Level INFO
+            Write-Log "Collecting resources for VM: $vmName" -Level INFO
 
             # Get VM details before deletion
             $vm = Get-AzVM -ResourceGroupName $ResourceGroup -Name $vmName -ErrorAction SilentlyContinue
@@ -351,51 +354,130 @@ function Remove-SessionHostVMs {
                 $osDiskName = $vm.StorageProfile.OsDisk.Name
                 $dataDisks = $vm.StorageProfile.DataDisks | ForEach-Object { $_.Name }
 
-                # Delete VM
-                if (-not $WhatIfMode) {
-                    Write-Log "  Deleting VM: $vmName..." -Level INFO
-                    Remove-AzVM -ResourceGroupName $ResourceGroup -Name $vmName -Force | Out-Null
-                    Write-Log "  VM deleted successfully" -Level SUCCESS
-                } else {
-                    Write-Log "  WHATIF: Would delete VM: $vmName" -Level WARNING
+                # Add VM to deletion list
+                $resourcesToDelete += @{
+                    Type = 'VM'
+                    Name = $vmName
+                    ResourceGroup = $ResourceGroup
                 }
 
-                # Delete NICs
+                # Add NICs to deletion list
                 foreach ($nicId in $nicIds) {
                     $nicName = ($nicId -split '/')[-1]
-                    if (-not $WhatIfMode) {
-                        Write-Log "  Deleting NIC: $nicName..." -Level INFO
-                        Remove-AzNetworkInterface -ResourceGroupName $ResourceGroup -Name $nicName -Force | Out-Null
-                        Write-Log "  NIC deleted successfully" -Level SUCCESS
-                    } else {
-                        Write-Log "  WHATIF: Would delete NIC: $nicName" -Level WARNING
+                    $resourcesToDelete += @{
+                        Type = 'NIC'
+                        Name = $nicName
+                        ResourceGroup = $ResourceGroup
                     }
                 }
 
-                # Delete disks if requested
+                # Add disks to deletion list if requested
                 if ($DeleteDisks) {
-                    # Delete OS disk
-                    if ($osDiskName -and -not $WhatIfMode) {
-                        Write-Log "  Deleting OS disk: $osDiskName..." -Level INFO
-                        Remove-AzDisk -ResourceGroupName $ResourceGroup -DiskName $osDiskName -Force | Out-Null
-                        Write-Log "  OS disk deleted successfully" -Level SUCCESS
-                    } elseif ($osDiskName) {
-                        Write-Log "  WHATIF: Would delete OS disk: $osDiskName" -Level WARNING
+                    if ($osDiskName) {
+                        $resourcesToDelete += @{
+                            Type = 'Disk'
+                            Name = $osDiskName
+                            ResourceGroup = $ResourceGroup
+                        }
                     }
 
-                    # Delete data disks
                     foreach ($dataDisk in $dataDisks) {
-                        if ($dataDisk -and -not $WhatIfMode) {
-                            Write-Log "  Deleting data disk: $dataDisk..." -Level INFO
-                            Remove-AzDisk -ResourceGroupName $ResourceGroup -DiskName $dataDisk -Force | Out-Null
-                            Write-Log "  Data disk deleted successfully" -Level SUCCESS
-                        } elseif ($dataDisk) {
-                            Write-Log "  WHATIF: Would delete data disk: $dataDisk" -Level WARNING
+                        if ($dataDisk) {
+                            $resourcesToDelete += @{
+                                Type = 'Disk'
+                                Name = $dataDisk
+                                ResourceGroup = $ResourceGroup
+                            }
                         }
                     }
                 }
             } else {
                 Write-Log "  WARNING: VM not found: $vmName" -Level WARNING
+            }
+        }
+
+        if ($WhatIfMode) {
+            Write-Log "WHATIF: Would delete the following resources:" -Level WARNING
+            foreach ($resource in $resourcesToDelete) {
+                Write-Log "  WHATIF: Would delete $($resource.Type): $($resource.Name)" -Level WARNING
+            }
+            return
+        }
+
+        Write-Log "Found $($resourcesToDelete.Count) resource(s) to delete" -Level INFO
+
+        # Step 1: Delete all VMs in parallel
+        $vmsToDelete = $resourcesToDelete | Where-Object { $_.Type -eq 'VM' }
+
+        if ($vmsToDelete.Count -gt 0) {
+            Write-Log "Deleting $($vmsToDelete.Count) VM(s) in parallel..." -Level INFO
+
+            $vmJobs = @()
+            foreach ($resource in $vmsToDelete) {
+                $vmJobs += Remove-AzVM -ResourceGroupName $resource.ResourceGroup -Name $resource.Name -Force -AsJob
+            }
+
+            Write-Log "Waiting for VM deletion jobs to complete..." -Level INFO
+            $vmJobs | Wait-Job | Out-Null
+
+            foreach ($job in $vmJobs) {
+                Receive-Job -Job $job | Out-Null
+                if ($job.State -eq 'Completed') {
+                    Write-Log "  VM deleted successfully: $($vmsToDelete[$vmJobs.IndexOf($job)].Name)" -Level SUCCESS
+                } else {
+                    Write-Log "  WARNING: VM deletion job failed: $($job.Name)" -Level WARNING
+                }
+                Remove-Job -Job $job
+            }
+        }
+
+        # Step 2: Delete all NICs in parallel
+        $nicJobs = @()
+        $nicsToDelete = $resourcesToDelete | Where-Object { $_.Type -eq 'NIC' }
+
+        Write-Log "Deleting $($nicsToDelete.Count) NIC(s) in parallel..." -Level INFO
+        foreach ($resource in $nicsToDelete) {
+            $nicJobs += Remove-AzNetworkInterface -ResourceGroupName $resource.ResourceGroup -Name $resource.Name -Force -AsJob
+        }
+
+        if ($nicJobs.Count -gt 0) {
+            Write-Log "Waiting for NIC deletion jobs to complete..." -Level INFO
+            $nicJobs | Wait-Job | Out-Null
+
+            foreach ($job in $nicJobs) {
+                Receive-Job -Job $job | Out-Null
+                if ($job.State -eq 'Completed') {
+                    Write-Log "  NIC deletion job completed: $($job.Name)" -Level SUCCESS
+                } else {
+                    Write-Log "  WARNING: NIC deletion job failed: $($job.Name)" -Level WARNING
+                }
+                Remove-Job -Job $job
+            }
+        }
+
+        # Step 3: Delete all disks in parallel
+        if ($DeleteDisks) {
+            $diskJobs = @()
+            $disksToDelete = $resourcesToDelete | Where-Object { $_.Type -eq 'Disk' }
+
+            Write-Log "Deleting $($disksToDelete.Count) disk(s) in parallel..." -Level INFO
+            foreach ($resource in $disksToDelete) {
+                $diskJobs += Remove-AzDisk -ResourceGroupName $resource.ResourceGroup -DiskName $resource.Name -Force -AsJob
+            }
+
+            if ($diskJobs.Count -gt 0) {
+                Write-Log "Waiting for disk deletion jobs to complete..." -Level INFO
+                $diskJobs | Wait-Job | Out-Null
+
+                foreach ($job in $diskJobs) {
+                    Receive-Job -Job $job | Out-Null
+                    if ($job.State -eq 'Completed') {
+                        Write-Log "  Disk deletion job completed: $($job.Name)" -Level SUCCESS
+                    } else {
+                        Write-Log "  WARNING: Disk deletion job failed: $($job.Name)" -Level WARNING
+                    }
+                    Remove-Job -Job $job
+                }
             }
         }
 
