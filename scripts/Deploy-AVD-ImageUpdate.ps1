@@ -15,6 +15,11 @@
 
     IMPORTANT: This script performs destructive operations. Review configuration carefully.
 
+.PARAMETER ApplyChanges
+    Set to $true to execute actual changes, or $false for dry run mode (no changes).
+    This parameter is mandatory and must be explicitly set when running the script.
+    Defaults to $false for safety.
+
 .NOTES
     Author  : Aaron Bhatti
     Version : 1.0.0
@@ -26,6 +31,12 @@
     - New VM image already created and available
     - Domain join credentials stored in Azure Automation credentials
 #>
+
+[CmdletBinding()]
+param(
+    [Parameter(Mandatory=$true)]
+    [bool]$ApplyChanges = $false
+)
 
 # ============= CONFIGURATION =============
 $TenantId = "3ec094fc-4da6-40af-8073-0303aaa9c094"
@@ -53,7 +64,6 @@ $VNetName = "vnet-prod-avd-uks"
 $SubnetName = "snet-prod-test-desktop-uks"
 
 # Operation Settings
-$WhatIfMode = $false                    # Set to $true for dry run
 $UserNotificationTimeMinutes = 1       # Time to give users before logging them off
 $UserNotificationMessage = "System maintenance will begin in 1 minutes. Please save your work and sign off."
 $MaxWaitForLogoffMinutes = 30          # Maximum time to wait for users to log off
@@ -62,9 +72,28 @@ $WaitTimeoutMinutes = 60               # Timeout for ARM deployment operations
 # =========================================
 
 $ErrorActionPreference = 'Stop'
+Set-StrictMode -Version Latest
 
 # Check if running in Azure Automation
 $isAzureAutomation = $null -ne $env:AUTOMATION_ASSET_ACCOUNTID
+
+# Set WhatIfMode based on ApplyChanges parameter
+$WhatIfMode = -not $ApplyChanges
+
+# Display execution mode
+if ($isAzureAutomation) {
+    if ($WhatIfMode) {
+        Write-Output "=== DRY RUN MODE - No changes will be made ==="
+    } else {
+        Write-Output "=== ACTUAL MODE - Changes will be made to your environment ==="
+    }
+} else {
+    if ($WhatIfMode) {
+        Write-Host "`n=== DRY RUN MODE - No changes will be made ===`n" -ForegroundColor Green
+    } else {
+        Write-Host "`n=== ACTUAL MODE - Changes will be made to your environment ===`n" -ForegroundColor Red
+    }
+}
 
 # Initialize transcript (local only)
 if (-not $isAzureAutomation) {
