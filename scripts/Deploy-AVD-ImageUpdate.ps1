@@ -658,8 +658,26 @@ function Deploy-NewSessionHosts {
         Write-Log "Deploying $Count VMs in parallel..." -Level INFO
 
         # Generate random 12-character password for local admin (plain text for ARM template)
-        $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789!@#$%'
-        $localAdminPasswordPlain = -join ((1..12) | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
+        # Ensure password meets Azure complexity requirements (at least 3 of: uppercase, lowercase, digit, special)
+        $uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ'
+        $lowercase = 'abcdefghijkmnpqrstuvwxyz'
+        $digits = '23456789'
+        $special = '!@#$%'
+
+        # Guarantee at least one from each category (4 chars)
+        $localAdminPasswordPlain = @(
+            $uppercase[(Get-Random -Maximum $uppercase.Length)],
+            $lowercase[(Get-Random -Maximum $lowercase.Length)],
+            $digits[(Get-Random -Maximum $digits.Length)],
+            $special[(Get-Random -Maximum $special.Length)]
+        )
+
+        # Add 8 more random characters from all categories
+        $allChars = $uppercase + $lowercase + $digits + $special
+        $localAdminPasswordPlain += (1..8) | ForEach-Object { $allChars[(Get-Random -Maximum $allChars.Length)] }
+
+        # Shuffle and join
+        $localAdminPasswordPlain = -join ($localAdminPasswordPlain | Get-Random -Count $localAdminPasswordPlain.Count)
 
         # Convert domain password to plain text for ARM template
         $domainPasswordPlain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto(
